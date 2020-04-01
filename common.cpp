@@ -62,6 +62,13 @@ bool initialize_net()
 		return true;
 	}
 
+	//设置显示工作
+	int gpu_index;
+	cudaGetDeviceCount(&gpu_index);
+	check_serious_error(gpu_index, "检测显卡失败");
+	cuda_set_device(gpu_index - 1);
+	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+
 	//读取标签数据
 	int classes_number;
 	g_global_set.net_set.classes_name = get_labels_custom(g_global_set.net_set.names_path, &classes_number);
@@ -160,7 +167,7 @@ void analyse_picture(const char* target, std::vector<object_info>& object, int s
 
 	//获取方框数量
 	g_global_set.detection_data = get_network_boxes(&g_global_set.net_set.match_net,
-		original_data.w, original_data.h, .45f, .5f, 0, 1, &g_global_set.box_number, 0);
+		original_data.w, original_data.h, .25f, .5f, 0, 1, &g_global_set.box_number, 0);
 
 	//非极大值抑制
 	do_nms_sort(g_global_set.detection_data, g_global_set.box_number, g_global_set.net_set.classes, .4f);
@@ -168,7 +175,7 @@ void analyse_picture(const char* target, std::vector<object_info>& object, int s
 	//获取有效的方框数量
 	int useble_box = 0;
 	detection_with_class* detector_data = get_actual_detections(g_global_set.detection_data,
-		g_global_set.box_number, .45f, &useble_box, g_global_set.net_set.classes_name);
+		g_global_set.box_number, .25f, &useble_box, g_global_set.net_set.classes_name);
 
 	//清空上一次的对象位置数据
 	object.clear();
@@ -319,7 +326,7 @@ void analyse_video(const char* video_path)
 {
 	//打开视频文件
 	video_handle_info video_info;
-	video_info.cap.open(video_path);
+	video_info.cap.open(0);
 	if (!video_info.cap.isOpened())
 	{
 		show_window_tip("打开视频文件失败");
@@ -518,21 +525,19 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			//操作每一个对象
 			for (int i = 0; i < useful_box; i++)
 			{
+				object_info object;
+
 				//获取类别索引
-				video_ptr->object.class_index = class_data[i].best_class;
+				object.class_index = class_data[i].best_class;
 
 				//获取置信度
-				video_ptr->object.confidence = class_data[i].det.prob[video_ptr->object.class_index] * 100.0f;
+				object.confidence = class_data[i].det.prob[object.class_index] * 100.0f;
 
 				//获取方框位置
-				get_object_rect(video_ptr->original_frame.cols, video_ptr->original_frame.rows, class_data[i].det.bbox, video_ptr->object);
+				get_object_rect(video_ptr->original_frame.cols, video_ptr->original_frame.rows, class_data[i].det.bbox, object);
 
 				//绘制方框
-				draw_object_rect(video_ptr->original_frame,
-					video_ptr->object.left,
-					video_ptr->object.top,
-					video_ptr->object.right,
-					video_ptr->object.down);
+				draw_object_rect(video_ptr->original_frame, object.left, object.top, object.right, object.down);
 			}
 
 			//能进行显示通知
@@ -556,3 +561,112 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 	return 0;
 }
 
+
+std::vector<std::string> get_path_from_str(const char* str, const char* file_type)
+{
+	std::vector<std::string> res;
+
+	char buffer[1024];
+	sprintf(buffer, "%s\\%s", str, file_type);
+
+	WIN32_FIND_DATAA find_data;
+	HANDLE file_handle = FindFirstFileA(buffer, &find_data);
+	assert(file_handle);
+
+	do
+	{
+		res.push_back(find_data.cFileName);
+	} while (FindNextFileA(file_handle, &find_data));
+
+	return res;
+}
+
+//将图片转化为标签
+void picture_to_label(const char* path, std::vector<std::string>& class_name, int index)
+{
+	//标签文件数量
+	int names_size = 0;
+
+	//读取标签名字
+	char **names = get_labels_custom("h:\\delete\\coco.names", &names_size); //get_labels(name_list);
+
+	//读取网络配置
+	network net = parse_network_cfg_custom("h:\\delete\\yolov3.cfg", 1, 1); // set batch=1
+
+	//加载权重文件
+	load_weights(&net, "h:\\delete\\yolov3.weights");
+
+	//融合卷积
+	fuse_conv_batchnorm(net);
+
+	//计算二进制权重
+	calculate_binary_weights(net);
+
+	//获取图片文件
+	std::vector<std::string> picture_list = get_path_from_str(path, "*.jpg");
+
+	printf("图片总数量 %d \n", picture_list.size());
+
+	//遍历每一张图片
+	for (int i = 0; i < picture_list.size(); i++)
+	{
+		if (i && i % 100 == 0) printf("完成数量 : %d \n", i);
+
+		//构建名称
+		std::string jpg_name = path;
+		jpg_name += "\\" + picture_list[i];
+
+		//加载图像后转化大小
+		image im = load_image((char*)jpg_name.c_str(), 0, 0, net.c);
+		image sized = resize_image(im, net.w, net.h);
+
+		//网络预测
+		network_predict(net, sized.data);
+
+		//获取对象信息
+		int nboxes = 0;
+		detection *dets = get_network_boxes(&net, im.w, im.h, .25f, .5f, 0, 1, &nboxes, 0);
+
+		//非极大值抑制
+		do_nms_sort(dets, nboxes, net.layers[net.n - 1].classes, .4f);
+
+		//获取有效方框
+		int detections_num;
+		detection_with_class* selected_detections = get_actual_detections(dets, nboxes, .25f, &detections_num, names);
+
+		//对每一个对象
+		for (int j = 0; j < detections_num; j++)
+		{
+			//获取类索引
+			int class_index = selected_detections[j].best_class;
+
+			//类型名称一样
+			auto result = std::find(class_name.begin(), class_name.end(), names[class_index]);
+			if (result != class_name.end())
+			{
+				//获取位置
+				box b = selected_detections[j].det.bbox;
+
+				//构建文件名字
+				std::string file_name = jpg_name.substr(0, jpg_name.rfind('.'));
+				file_name += ".txt";
+
+				//写入位置
+				std::fstream file(file_name, std::fstream::out);
+				if (file.is_open())
+				{
+					char format[1024];
+					sprintf(format, "%d %f %f %f %f", index, b.x, b.y, b.w, b.h);
+					file.write(format, strlen(format));
+					file.close();
+				}
+			}
+		}
+
+		//释放内存
+		free_detections(dets, nboxes);
+		free_image(im);
+		free_image(sized);
+		free(selected_detections);
+	}
+}

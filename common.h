@@ -46,9 +46,6 @@ struct video_frame_info
 
 	//原始视频帧
 	cv::Mat original_frame;
-
-	//对象信息
-	struct object_info object;
 };
 
 //视频处理相关
@@ -227,8 +224,8 @@ unsigned __stdcall prediction_frame_proc(void* prt);
 
 
 
-
-
+std::vector<std::string> get_path_from_str(const char* str, const char* file_type);
+void picture_to_label(const char* path, std::vector<std::string>& class_name, int index);
 
 
 

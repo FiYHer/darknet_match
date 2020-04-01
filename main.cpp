@@ -8,15 +8,29 @@ global_set g_global_set;
 
 int main(int argc, char* argv[])
 {
-	register_window_struct();
-	create_window();
-	initialize_d3d9();
-	initialize_imgui();
-	window_message_handle();
-	clear_imgui_set();
-	clear_d3d9_set();
+	//设置显示工作
+	int gpu_index;
+	cudaGetDeviceCount(&gpu_index);
+	cuda_set_device(gpu_index - 1);
+	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+
+	std::vector<std::string> class_name{ "car","bus","train","truck" };
+	picture_to_label("H:\\CarPicture\\Cars1", class_name, 1);
+
 	return 0;
 }
+
+//int _stdcall WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd )
+//{
+//	register_window_struct();
+//	create_window();
+//	initialize_d3d9();
+//	initialize_imgui();
+//	window_message_handle();
+//	clear_imgui_set();
+//	clear_d3d9_set();
+//	return 0;
+//}
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT _stdcall window_process(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
