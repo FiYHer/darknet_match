@@ -151,7 +151,7 @@ void imgui_show_handle()
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 	imgui_show_manager();
 	imgui_file_set_window();
 	imgui_test_picture_window();
@@ -311,6 +311,10 @@ void imgui_test_video_window()
 
 	ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
 	ImGui::Begin(u8"智能交通系统  -  测试视频窗口",&g_global_set.imgui_show_set.show_test_video_window);
+
+	ImGui::SliderInt(u8"显示视频延迟", &g_global_set.show_video_delay, 1, 100);
+	ImGui::SliderInt(u8"读取视频延迟", &g_global_set.read_video_delay, 1, 100);
+	ImGui::SliderInt(u8"检测视频延迟", &g_global_set.detect_video_delay, 1, 100);
 
 	static char video_path[default_char_size] = "match.mp4";
 	ImGui::InputText(u8"视频路径", video_path, default_char_size);

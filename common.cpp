@@ -216,10 +216,10 @@ void get_object_rect(int width, int height, box& box_pos, object_info& object)
 	int top = (box_pos.y - box_pos.h / 2.)*height;
 	int down = (box_pos.y + box_pos.h / 2.)*height;
 
-	if (left < 0) left = 0;
+	if (left < 0) left = 1;
 	if (right > width - 1) right = width - 1;
-	if (top < 0) top = 0;
-	if (down > width - 1) down = width - 1;
+	if (top < 0) top = 1;
+	if (down > height - 1) down = height - 1;
 
 	object.left = left;
 	object.top = top;
@@ -233,7 +233,7 @@ void draw_object_rect(cv::Mat& buffer, int left, int top, int right, int down)
 	int width = buffer.cols;
 	int height = buffer.rows;
 	int channel = buffer.channels();
-	static int r = 255, g = 0, b = 0;
+	static int r = rand() % 255, g = rand() % 255, b = rand() % 255;
 
 	for (int k = 0; k < size; k++)
 	{
@@ -346,26 +346,53 @@ void analyse_video(const char* video_path)
 		check_serious_error(detect_table[i], "创建检测视频帧线程失败");
 	}
 
+	//延迟
+	int& delay = g_global_set.show_video_delay;
+
+	double fps = 0, before = 0;
+
 	//循环显示视频帧
 	while (true)
 	{
-		//如果有结果了
-		if (video_info.useful_show_count)
+		video_frame_info* video_ptr = nullptr;
+
+		//获取控制权
+		video_info.entry();
+
+		//如果有视频帧
+		if (video_info.detect_datas.size())
 		{
-			//获取结果
-			video_frame_info frame_info;
-			video_info.entry();
-			frame_info = std::move(video_info.decect_data.front());//拿去第一个
-			video_info.decect_data.erase(video_info.decect_data.begin());//进行移除
-			video_info.useful_show_count--;//可显示视频帧减少
-			video_info.leave();
+			//我们拿取第一个视频帧
+			video_ptr = video_info.detect_datas[0];
+			
+			//能显示就显示
+			if (video_ptr->display) video_info.detect_datas.erase(video_info.detect_datas.begin());
+			else video_ptr = nullptr;
+		}
+
+		//释放控制权
+		video_info.leave();
+
+		//如果有结果了
+		if (video_ptr)
+		{
+			double after = get_time_point();    // more accurate time measurements
+			double curr = 1000000. / (after - before);
+			fps = fps * 0.9 + curr * 0.1;
+			before = after;
+			static char fps_char[default_char_size];
+			sprintf(fps_char, "Fps is : %.2lf", fps);
+			cv::putText(video_ptr->original_frame, fps_char, cv::Point(50, 50), cv::FONT_HERSHEY_COMPLEX, 2, cv::Scalar(255, 0, 0));
 
 			//显示结果
-			cv::imshow(video_path, frame_info.original_frame);
-			cv::waitKey(1);
+			cv::imshow(video_path, video_ptr->original_frame);
+			cv::waitKey(delay);
+
+			//释放视频帧
+			video_ptr->original_frame.release();
 		}
 		else if(!video_info.detect_frame) break;
-		else Sleep(1);
+		else Sleep(delay);
 	}
 
 	//关闭窗口
@@ -384,30 +411,39 @@ unsigned __stdcall read_frame_proc(void* prt)
 	//获取
 	video_handle_info* video_info = (video_handle_info*)prt;
 
+	//延迟！
+	int& delay = g_global_set.read_video_delay;
+
 	//开始循环读取视频帧
 	while (video_info->read_frame)
 	{
 		//要求退出
 		if(video_info->break_state) break;
 
-		//读取一帧视频
-		video_frame_info video;
-		if (!video_info->cap.read(video.original_frame)) break;
+		//防止读取太快检测不过来而占用太多内存
+		if (video_info->max_frame_count > video_info->detect_datas.size())
+		{
+			//申请内存
+			video_frame_info* video_ptr = new video_frame_info;
+			check_serious_error(video_ptr, "申请保存视频帧内存失败");
+			video_ptr->detecting = false;//没检测
+			video_ptr->display = false;//不能显示
 
-		//尝试取得控制权
-		video_info->entry();
+			//读取一帧视频
+			if (!video_info->cap.read(video_ptr->original_frame)) break;
 
-		//调用移动构造函数
-		video_info->decect_data.push_back(std::move(video));
+			//尝试取得控制权
+			video_info->entry();
 
-		//提示预测线程去预测该视频帧
-		video_info->useful_detect_count++;
+			//赋值指针
+			video_info->detect_datas.push_back(video_ptr);
 
-		//释放控制器
-		video_info->leave();
+			//释放控制权
+			video_info->leave();
+		}
 
 		//放过CPU
-		Sleep(10);
+		Sleep(delay);
 	}
 	video_info->read_frame = false;
 	return 0;
@@ -426,31 +462,40 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 	//类型数量
 	int classes = g_global_set.net_set.classes;
 
+	//延迟
+	int& delay = g_global_set.detect_video_delay;
+
 	//开始检测视频帧
 	while (video_info->detect_frame)
 	{
 		//要求退出
 		if(video_info->break_state) break;
 
-		//判断是否有源视频帧可以去预测
-		if (video_info->useful_detect_count)
+		video_frame_info* video_ptr = nullptr;
+
+		//获取控制权
+		video_info->entry();
+
+		//找到一个还没开始检测的视频帧
+		for (int i = 0; i < video_info->detect_datas.size(); i++)
 		{
-			//获取控制权后获取一帧图像
-			video_info->entry();
+			if (video_info->detect_datas[i]->detecting == false)
+			{
+				video_info->detect_datas[i]->detecting = true;
+				video_ptr = video_info->detect_datas[i];
+				break;
+			}
+		}
 
-			//指针加速
-			video_frame_info* video = &video_info->decect_data[video_info->useful_show_count];
+		//释放控制权
+		video_info->leave();
 
-			//可检测视频帧数量减少
-			video_info->useful_detect_count--;
-		
+		//有视频帧让我们工作
+		if (video_ptr)
+		{
 			//进行缩放
 			cv::Mat picture_data = cv::Mat(input_height, input_width, CV_8UC(input_channel));
-			cv::resize(video->original_frame, picture_data, picture_data.size(), 0, 0, cv::INTER_LINEAR);
-			//cv::cvtColor(picture_data, picture_data, cv::COLOR_RGB2BGR);
-
-			//释放控制权
-			video_info->leave();
+			cv::resize(video_ptr->original_frame, picture_data, picture_data.size(), 0, 0, cv::INTER_LINEAR);
 
 			//将图像转换
 			image original_data;
@@ -470,34 +515,28 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			int useful_box = 0;
 			detection_with_class* class_data = get_actual_detections(detection_data, box_count, .45f, &useful_box, g_global_set.net_set.classes_name);
 
-			//取得控制权
-			video_info->entry();
+			//操作每一个对象
+			for (int i = 0; i < useful_box; i++)
+			{
+				//获取类别索引
+				video_ptr->object.class_index = class_data[i].best_class;
 
-			////操作每一个对象
-			//for (int i = 0; i < useful_box; i++)
-			//{
-			//	//获取类别索引
-			//	video->object.class_index = class_data[i].best_class;
+				//获取置信度
+				video_ptr->object.confidence = class_data[i].det.prob[video_ptr->object.class_index] * 100.0f;
 
-			//	//获取置信度
-			//	video->object.confidence = class_data[i].det.prob[video->object.class_index] * 100.0f;
+				//获取方框位置
+				get_object_rect(video_ptr->original_frame.cols, video_ptr->original_frame.rows, class_data[i].det.bbox, video_ptr->object);
 
-			//	//获取方框位置
-			//	get_object_rect(video->original_frame.cols, video->original_frame.rows, class_data[i].det.bbox, video->object);
+				//绘制方框
+				draw_object_rect(video_ptr->original_frame,
+					video_ptr->object.left,
+					video_ptr->object.top,
+					video_ptr->object.right,
+					video_ptr->object.down);
+			}
 
-			//	//绘制方框
-			//	draw_object_rect(video->original_frame,
-			//		video->object.left,
-			//		video->object.top,
-			//		video->object.right,
-			//		video->object.down);
-			//}
-
-			//预测完毕了该视频帧，提示可以进行显示了
-			video_info->useful_show_count++;
-
-			//释放控制权
-			video_info->leave();
+			//能进行显示通知
+			video_ptr->display = true;
 
 			//释放图像数据
 			free_image(original_data);
@@ -506,9 +545,12 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			//释放内存
 			free_detections(detection_data, box_count);
 			free(class_data);
+
+			//延迟
+			Sleep(delay);
 		}
 		else if(!video_info->read_frame) break;//视频读取完了
-		else Sleep(1);//没有图像就暂停1毫秒
+		else Sleep(delay);//没有图像就暂停1毫秒
 	}
 	video_info->detect_frame = false;
 	return 0;

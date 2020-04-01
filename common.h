@@ -38,6 +38,12 @@ struct object_info
 //视频帧相关
 struct video_frame_info
 {
+	//是否正在预测
+	bool detecting;
+
+	//是否能够显示
+	bool display;
+
 	//原始视频帧
 	cv::Mat original_frame;
 
@@ -56,14 +62,11 @@ struct video_handle_info
 	//视频类指针
 	cv::VideoCapture cap;
 
+	//队列最多数量,因为读取速度远远快于检测速度
+	int max_frame_count;
+
 	//检测视频帧队列
-	std::vector<video_frame_info> decect_data;
-
-	//可用显示帧数量
-	unsigned int useful_show_count;
-
-	//可用检测帧数量
-	unsigned int useful_detect_count;
+	std::vector<video_frame_info*> detect_datas;
 
 	//关键段用于线程同步
 	CRITICAL_SECTION critical_srction;
@@ -72,7 +75,7 @@ struct video_handle_info
 	{ 
 		break_state = false;
 		read_frame = detect_frame = true;
-		useful_show_count = useful_detect_count = 0;
+		max_frame_count = 50;
 		InitializeCriticalSection(&critical_srction); 
 	}
 	void entry() { EnterCriticalSection(&critical_srction); }
@@ -82,7 +85,8 @@ struct video_handle_info
 		break_state = true;
 		read_frame = detect_frame = false;
 		if (cap.isOpened()) cap.release();
-		if (decect_data.size()) decect_data.clear();
+		for (auto& it : detect_datas) delete it;
+		detect_datas.clear();
 		DeleteCriticalSection(&critical_srction); 
 	}
 };
@@ -145,8 +149,14 @@ struct global_set
 	//图片检测时间
 	double detection_time;
 
+	//线程数量
 	int video_read_frame_threads;
 	int video_detect_frame_threads;
+
+	//延迟设置
+	int show_video_delay;
+	int read_video_delay;
+	int detect_video_delay;
 
 	//界面显示相关
 	struct imgui_set imgui_show_set;
@@ -156,8 +166,11 @@ struct global_set
 
 	global_set()
 	{
+		//一个读取线程就比4个检测线程快了,而且这里有bug
 		video_read_frame_threads = 1;
-		video_detect_frame_threads = 2;
+		video_detect_frame_threads = 4;
+
+		show_video_delay = read_video_delay = detect_video_delay = 10;
 	}
 };
 extern global_set g_global_set;
