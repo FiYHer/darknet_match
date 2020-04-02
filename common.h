@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <queue>
+#include <map>
 
 #include <windows.h>
 #include <process.h>
@@ -178,6 +179,21 @@ void check_serious_error(bool state, const char* show_str = "");
 //显示窗口提示
 void show_window_tip(const char* str);
 
+//获取显卡的数量
+int get_gpu_count();
+
+//获取显卡相关信息
+cudaDeviceProp* get_gpu_infomation(int gpu_count);
+
+//获取系统类型
+int get_os_type();
+
+//获取CPU核心数
+int get_cpu_kernel();
+
+//获取物理内存总数
+int get_physical_memory();
+
 //选择指定类型的一个文件
 bool select_type_file(const char* type_file, char* return_str, int return_str_size = default_char_size);
 
@@ -225,7 +241,7 @@ unsigned __stdcall prediction_frame_proc(void* prt);
 
 
 std::vector<std::string> get_path_from_str(const char* str, const char* file_type);
-void picture_to_label(const char* path, std::vector<std::string>& class_name, int index);
+void picture_to_label(const char* path, std::map<std::string,int>& class_names);
 
 
 

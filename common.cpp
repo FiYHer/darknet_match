@@ -16,6 +16,52 @@ void show_window_tip(const char* str)
 	MessageBoxA(NULL, str, NULL, NULL);
 }
 
+int get_gpu_count()
+{
+	int gpu_count = 0;
+	check_serious_error(cudaGetDeviceCount(&gpu_count) == cudaSuccess, "获取显卡数量失败");
+	check_serious_error(gpu_count, "没有发现电脑显卡");
+	return gpu_count;
+}
+
+cudaDeviceProp* get_gpu_infomation(int gpu_count)
+{
+	//获取显卡相关信息
+	cudaDeviceProp* gpu_info = new cudaDeviceProp[gpu_count];
+	check_serious_error(gpu_info, "申请显卡相关内存失败");
+	for (int i = 0; i < gpu_count; i++) check_serious_error(cudaGetDeviceProperties(&gpu_info[i], i) == cudaSuccess, "获取显卡信息失败");
+	return gpu_info;
+}
+
+int get_os_type()
+{
+	typedef void(__stdcall *get_os)(DWORD*, DWORD*, DWORD*);
+	get_os func = (get_os)GetProcAddress(LoadLibraryA("ntdll.dll"), "RtlGetNtVersionNumbers");
+	if (func)
+	{
+		DWORD nativeMajor = 0, nativeMinor = 0, dwBuildNumber = 0;
+		func(&nativeMajor, &nativeMinor, &dwBuildNumber);
+		if (nativeMajor == 6 && nativeMinor == 1) return 7;
+		if (nativeMajor == 6 && nativeMinor == 3) return 8;
+		if (nativeMajor == 10) return 10;
+	}
+	return -1;
+}
+
+int get_cpu_kernel()
+{
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+	return info.dwNumberOfProcessors;
+}
+
+int get_physical_memory()
+{
+	MEMORYSTATUS memory;
+	GlobalMemoryStatus(&memory);
+	return memory.dwTotalPhys / 1024 / 1024 / 1024;
+}
+
 bool select_type_file(const char* type_file, char* return_str,int return_str_size)
 {
 	OPENFILENAMEA open_file{0};
@@ -582,7 +628,7 @@ std::vector<std::string> get_path_from_str(const char* str, const char* file_typ
 }
 
 //将图片转化为标签
-void picture_to_label(const char* path, std::vector<std::string>& class_name, int index)
+void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 {
 	//标签文件数量
 	int names_size = 0;
@@ -618,6 +664,7 @@ void picture_to_label(const char* path, std::vector<std::string>& class_name, in
 
 		//加载图像后转化大小
 		image im = load_image((char*)jpg_name.c_str(), 0, 0, net.c);
+		if(im.data == NULL) continue;
 		image sized = resize_image(im, net.w, net.h);
 
 		//网络预测
@@ -634,33 +681,46 @@ void picture_to_label(const char* path, std::vector<std::string>& class_name, in
 		int detections_num;
 		detection_with_class* selected_detections = get_actual_detections(dets, nboxes, .25f, &detections_num, names);
 
-		//对每一个对象
-		for (int j = 0; j < detections_num; j++)
+		//有对象就创建文件
+		if (detections_num)
 		{
-			//获取类索引
-			int class_index = selected_detections[j].best_class;
+			//构建文件名字
+			std::string file_name = jpg_name.substr(0, jpg_name.rfind('.'));
+			file_name += ".txt";
 
-			//类型名称一样
-			auto result = std::find(class_name.begin(), class_name.end(), names[class_index]);
-			if (result != class_name.end())
+			//写入位置
+			std::fstream file(file_name, std::fstream::out | std::fstream::trunc);
+			if (file.is_open())
 			{
-				//获取位置
-				box b = selected_detections[j].det.bbox;
-
-				//构建文件名字
-				std::string file_name = jpg_name.substr(0, jpg_name.rfind('.'));
-				file_name += ".txt";
-
-				//写入位置
-				std::fstream file(file_name, std::fstream::out);
-				if (file.is_open())
+				//对每一个对象
+				for (int j = 0; j < detections_num; j++)
 				{
-					char format[1024];
-					sprintf(format, "%d %f %f %f %f", index, b.x, b.y, b.w, b.h);
-					file.write(format, strlen(format));
-					file.close();
+					//获取类索引
+					int class_index = selected_detections[j].best_class;
+
+					//类型名称一样
+					for (auto& it : class_names)
+					{
+						if (it.first == names[class_index])
+						{
+							//获取位置
+							box b = selected_detections[j].det.bbox;
+
+							//写入信息
+							char format[1024];
+							sprintf(format, "%d %f %f %f %f\n", it.second, b.x, b.y, b.w, b.h);
+							file.write(format, strlen(format));
+
+							//退出当前循环
+							break;
+						}
+					}
 				}
+
 			}
+
+			//关闭文件
+			file.close();
 		}
 
 		//释放内存

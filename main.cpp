@@ -6,31 +6,43 @@
 
 global_set g_global_set;
 
-int main(int argc, char* argv[])
-{
-	//设置显示工作
-	int gpu_index;
-	cudaGetDeviceCount(&gpu_index);
-	cuda_set_device(gpu_index - 1);
-	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
-
-	std::vector<std::string> class_name{ "car","bus","train","truck" };
-	picture_to_label("H:\\CarPicture\\Cars1", class_name, 1);
-
-	return 0;
-}
-
-//int _stdcall WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd )
+//int main(int argc, char* argv[])
 //{
-//	register_window_struct();
-//	create_window();
-//	initialize_d3d9();
-//	initialize_imgui();
-//	window_message_handle();
-//	clear_imgui_set();
-//	clear_d3d9_set();
+//	//设置显示工作
+//	int gpu_index;
+//	cudaGetDeviceCount(&gpu_index);
+//	cuda_set_device(gpu_index - 1);
+//	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+//
+//	std::map<std::string, int> class_names;
+//	class_names.insert({ "car",1 });
+//	class_names.insert({ "bus",1 });
+//	class_names.insert({ "train" ,1 });
+//	class_names.insert({ "truck" ,1 });
+//	class_names.insert({ "person" ,2});
+//	class_names.insert({ "motorbike",3 });
+//	class_names.insert({ "bicycle" ,4 });
+//	class_names.insert({ "traffic light",5 });
+//	class_names.insert({ "dog",6 });
+//
+//	picture_to_label("H:\\TestPicture\\自行车_ivsky", class_names);
+//
+//	printf("标记完成!------------------------------------------------------");
+//	getchar();
 //	return 0;
 //}
+
+int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+{
+	register_window_struct();
+	create_window();
+	initialize_d3d9();
+	initialize_imgui();
+	window_message_handle();
+	clear_imgui_set();
+	clear_d3d9_set();
+	return 0;
+}
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT _stdcall window_process(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
@@ -38,6 +50,7 @@ LRESULT _stdcall window_process(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
 	if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
 		return true;
 
+	//窗口大小改变导致设备丢失
 	if (msg == WM_SIZE && wparam != SIZE_MINIMIZED)
 	{
 		g_global_set.d3dpresent.BackBufferWidth = LOWORD(lparam);
@@ -46,6 +59,7 @@ LRESULT _stdcall window_process(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
 		return true;
 	}
 
+	//退出程序
 	if (msg == WM_DESTROY) PostQuitMessage(0);
 
 	return DefWindowProcA(hwnd, msg, wparam, lparam);
@@ -53,6 +67,7 @@ LRESULT _stdcall window_process(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
 
 void register_window_struct()
 {
+	srand((unsigned int)time(0));
 	sprintf(g_global_set.window_class_name, "中国软件杯_交通智能系统_桂林电子科技大学北海校区_测试程序_%d", rand());
 
 	WNDCLASSEXA window_class{
@@ -110,7 +125,7 @@ void initialize_imgui()
 	ImGui_ImplDX9_Init(g_global_set.direct3ddevice9);
 
 	const char* font_path = "msyh.ttc";
-	check_serious_error(_access(font_path, 0) != -1, "字体文件缺失");
+	check_serious_error(_access(font_path, 0) != -1, "微软字体字体文件缺失");
 	io.Fonts->AddFontFromFileTTF(font_path, 20.0f, NULL, io.Fonts->GetGlyphRangesChineseFull());
 }
 
@@ -139,15 +154,24 @@ void picture_to_texture()
 	//d3d9设备为空
 	if (!g_global_set.direct3ddevice9) return;
 
+	//获取宽度 高度 通道数
 	int width = g_global_set.width;
 	int height = g_global_set.height;
 	int channel = g_global_set.channel;
+
+	//创建图片纹理
 	HRESULT result = g_global_set.direct3ddevice9->CreateTexture(width, height, 1, D3DUSAGE_DYNAMIC, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &g_global_set.direct3dtexture9, NULL);
 	check_serious_error(result == S_OK, "加载图片数据到纹理失败");
 	D3DLOCKED_RECT lock_rect;
+
+	//锁定纹理内存
 	g_global_set.direct3dtexture9->LockRect(0, &lock_rect, NULL, 0);
+
+	//将图片数据拷贝到纹理内存中
 	for (int i = 0; i < g_global_set.height; i++) 
 		memcpy((unsigned char *)lock_rect.pBits + lock_rect.Pitch * i, g_global_set.picture_data + (width * channel) * i, (width * channel));
+	
+	//释放锁定内存
 	g_global_set.direct3dtexture9->UnlockRect(0);
 }
 
@@ -159,12 +183,15 @@ void clear_picture_texture()
 
 void imgui_show_handle()
 {
+	//将图片数据拷贝到纹理
 	picture_to_texture();
 
+	//渲染相关准备
 	ImGui_ImplDX9_NewFrame();
 	ImGui_ImplWin32_NewFrame();
 	ImGui::NewFrame();
 
+	//开始渲染一系列窗口
 	//ImGui::ShowDemoWindow();
 	imgui_show_manager();
 	imgui_file_set_window();
@@ -172,6 +199,7 @@ void imgui_show_handle()
 	imgui_test_video_window();
 	imgui_test_camera_window();
 
+	//将渲染出来的界面绘制到窗口上相关代码
 	ImGui::EndFrame();
 	static D3DCOLOR background_color = D3DCOLOR_RGBA(200, 200, 200, 0);
 	g_global_set.direct3ddevice9->SetRenderState(D3DRS_ZENABLE, false);
@@ -188,15 +216,41 @@ void imgui_show_handle()
 	if (result == D3DERR_DEVICELOST 
 		&& g_global_set.direct3ddevice9->TestCooperativeLevel() == D3DERR_DEVICENOTRESET) reset_d3d9_device();
 
+	//释放图片纹理内存
 	clear_picture_texture();
 }
 
 void imgui_show_manager()
 {
-	ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(700, 300), ImGuiCond_FirstUseEver);
 
 	ImGui::Begin(u8"智能交通系统");
 
+	//获取显卡数量
+	static int gpu_count = get_gpu_count();
+
+	//获取显卡相关信息
+	static cudaDeviceProp* gpu_info = get_gpu_infomation(gpu_count);
+
+	//显示显卡相关信息
+	for (int i = 0; i < gpu_count; i++)
+		ImGui::BulletText(u8"GPU型号[%s]   全局内存 [%d]   共享内存[%d]",
+			gpu_info[i].name, gpu_info[i].totalGlobalMem, gpu_info[i].sharedMemPerBlock);
+
+	//获取系统类型
+	static int os_type = get_os_type();
+	if(os_type == -1) ImGui::BulletText(u8"系统类型[未知]");
+	else ImGui::BulletText(u8"系统类型[Windows %d]", os_type);
+
+	//显示CPU核心数
+	static int cpu_kernel = get_cpu_kernel();
+	ImGui::BulletText(u8"CPU核心[%d]", cpu_kernel);
+
+	//显示内存总数
+	static int phy_memory = get_physical_memory();
+	ImGui::BulletText(u8"物理内存[%dg]", phy_memory);
+
+	ImGui::Separator();
 	if (ImGui::Button(u8"文件配置窗口")) g_global_set.imgui_show_set.show_file_set_window = true;
 
 	if (ImGui::Button(u8"测试图片系统窗口")) g_global_set.imgui_show_set.show_test_picture_window = true;
