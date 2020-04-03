@@ -32,7 +32,8 @@ global_set g_global_set;
 //	return 0;
 //}
 
-int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+int main(int argc,char* arv[])
+//int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
 	register_window_struct();
 	create_window();
@@ -192,7 +193,7 @@ void imgui_show_handle()
 	ImGui::NewFrame();
 
 	//开始渲染一系列窗口
-	//ImGui::ShowDemoWindow();
+	ImGui::ShowDemoWindow();
 	imgui_show_manager();
 	imgui_file_set_window();
 	imgui_test_picture_window();
@@ -257,7 +258,7 @@ void imgui_show_manager()
 	ImGui::SameLine();
 	if (ImGui::Button(u8"测试视频系统窗口")) g_global_set.imgui_show_set.show_test_video_window = true;
 	ImGui::SameLine();
-	if (ImGui::Button(u8"测试摄像头系统窗口")) g_global_set.imgui_show_set.show_test_picture_window = true;
+	if (ImGui::Button(u8"测试摄像头系统窗口")) g_global_set.imgui_show_set.show_test_camera_window = true;
 
 	ImGui::End();
 }
@@ -269,11 +270,6 @@ void imgui_file_set_window()
 	ImGui::SetNextWindowSize(ImVec2(500,350), ImGuiCond_FirstUseEver);
 	ImGui::Begin(u8"智能交通系统  -  文件设置窗口", &g_global_set.imgui_show_set.show_file_set_window);
 
-	ImGui::TextColored(ImVec4(255, 0, 0, 255), u8"没有特殊情况请不要随意改动文件路径!!!");
-
-	static char data_path[default_char_size] = "match.data";
-	ImGui::InputText(u8"*.data文件路径", data_path, default_char_size);
-
 	static char names_path[default_char_size] = "match.names";
 	ImGui::InputText(u8"*names文件路径", names_path, default_char_size);
 
@@ -283,42 +279,18 @@ void imgui_file_set_window()
 	static char weights_path[default_char_size] = "match.weights";
 	ImGui::InputText(u8"*.weights文件路径", weights_path, default_char_size);
 
-	static int classes_number = 20;
-	ImGui::Text(u8"类别数量 : %d", classes_number);
-
-	if (ImGui::Button(u8"选择*.data文件"))
-	{
-		if (select_type_file("data flie\0*.data\0\0", data_path))
-		{
-			list* data_list = read_data_cfg(data_path);
-			classes_number = option_find_int(data_list, "classes", 0);
-			char* temp = option_find_str(data_list, "names", "default.names");
-			if (temp) strncpy(names_path, temp, strlen(temp));
-
-			free_list_contents_kvp(data_list);
-			free_list(data_list);
-		}
-	}
+	if (ImGui::Button(u8"选择*.names文件")) select_type_file("names flie\0*.names\0\0", names_path);
 	ImGui::SameLine();
 	if (ImGui::Button(u8"选择*.cfg文件")) select_type_file("cfg file\0*.cfg\0\0", cfg_path);
 	ImGui::SameLine();
-	if (ImGui::Button(u8"选择*.weights文件")) select_type_file("weights\0*.weights\0\0", weights_path);
+	if (ImGui::Button(u8"选择*.weights文件")) select_type_file("weights file\0*.weights\0\0", weights_path);
 	
 	ImGui::Separator();
 	static bool load_net = false;
 	if (!load_net) ImGui::TextColored(ImVec4(0, 0, 255, 255), u8"没有初始化网络 网络初始化会卡顿<=20秒 请等待....");
 	else ImGui::TextColored(ImVec4(0, 255, 0, 255), u8"初始化网络成功....");
 
-	if (ImGui::Button(u8"初始化网络"))
-	{
-		strncpy(g_global_set.net_set.data_path, data_path, strlen(data_path));
-		strncpy(g_global_set.net_set.names_path, names_path, strlen(names_path));
-		strncpy(g_global_set.net_set.cfg_path, cfg_path, strlen(cfg_path));
-		strncpy(g_global_set.net_set.weights_path, weights_path, strlen(weights_path));
-		g_global_set.net_set.classes = classes_number;
-		if (initialize_net()) load_net = true;
-		else load_net = false;
-	}
+	if (ImGui::Button(u8"初始化网络") && !load_net) load_net = initialize_net(names_path, cfg_path, weights_path);
 	ImGui::SameLine();
 	if (ImGui::Button(u8"清理网络"))
 	{
@@ -336,34 +308,40 @@ void imgui_test_picture_window()
 	ImGui::SetNextWindowSize(ImVec2(800, 500), ImGuiCond_FirstUseEver);
 	ImGui::Begin(u8"智能交通系统  -  测试图片窗口",&g_global_set.imgui_show_set.show_test_picture_window);
 
+	auto func = [](float& value, const char* str)
+	{
+		ImGui::Text("%s [%f]", string_to_utf8(str).c_str(), value);
+		ImGui::SameLine();
+
+		float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+		ImGui::PushButtonRepeat(true);
+		if (ImGui::ArrowButton("##left", ImGuiDir_Left)) { value -= 0.2f; }
+		ImGui::SameLine(0.0f, spacing);
+		if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { value += 0.2f; }
+		ImGui::PopButtonRepeat();
+	};
+
+	//图片检测控制
+	static picture_detect_info detect_info;
+
+	func(detect_info.thresh, "thresh");
+	ImGui::SameLine();
+	func(detect_info.hier_thresh, "hier_thresh");
+	ImGui::SameLine();
+	func(detect_info.nms, "nms");
+	ImGui::SameLine();
+	static bool show_window = false;
+	ImGui::Checkbox(u8"显示窗口", &show_window);
+
 	static char target_picture[default_char_size] = "match.jpg";
 	ImGui::InputText(u8"测试图片", target_picture, default_char_size);
-	ImGui::SameLine();
 	if (ImGui::Button(u8"选择图片")) select_type_file("image file\0*.jpg;0*.bmp;0*.png\0\0", target_picture, default_char_size);
 	ImGui::SameLine();
 
-	//获取的对象信息
-	static std::vector<object_info> object;
-
 	if (ImGui::Button(u8"执行检测"))
 	{
-		if (g_global_set.net_set.initizlie) analyse_picture(target_picture, object);
+		if (g_global_set.net_set.initizlie) analyse_picture(target_picture, detect_info, show_window);
 		else show_window_tip("网络没有初始化");
-	}
-
-	//显示对象数据
-	if (object.size())
-	{
-		char temp[default_char_size];
-		sprintf(temp, "检测到对象数量 : %d\t 检测耗时 : %lf毫秒", object.size(), g_global_set.detection_time);
-		ImGui::BulletText(string_to_utf8(temp).c_str());
-
-		for (auto& it : object)
-		{
-			sprintf(temp, "Object : %s\t Confidence : %f\t left : %d  top : %d  right : %d  down : %d \n",
-				g_global_set.net_set.classes_name[it.class_index], it.confidence, it.left, it.top, it.right, it.down);
-			ImGui::BulletText(temp);
-		}
 	}
 
 	//存在图像纹理，就显示图片
@@ -380,21 +358,45 @@ void imgui_test_video_window()
 	ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
 	ImGui::Begin(u8"智能交通系统  -  测试视频窗口",&g_global_set.imgui_show_set.show_test_video_window);
 
-	ImGui::SliderInt(u8"显示视频延迟", &g_global_set.show_video_delay, 1, 100);
-	ImGui::SliderInt(u8"读取视频延迟", &g_global_set.read_video_delay, 1, 100);
-	ImGui::SliderInt(u8"检测视频延迟", &g_global_set.detect_video_delay, 1, 100);
+	auto func = [](int& value, const char* str)
+	{
+		ImGui::Text("%s [%d]", string_to_utf8(str).c_str(), value);
+		ImGui::SameLine();
+
+		float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
+		ImGui::PushButtonRepeat(true);
+		if (ImGui::ArrowButton("##left", ImGuiDir_Left)) { value--; }
+		ImGui::SameLine(0.0f, spacing);
+		if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { value++; }
+		ImGui::PopButtonRepeat();
+	};
+
+	//视频控制
+	static video_control control_info;
+
+	func(control_info.show_delay, "显示延迟");
+	ImGui::SameLine();
+	func(control_info.read_delay, "读取延迟");
+	ImGui::SameLine();
+	func(control_info.detect_delay, "检测延迟");
 
 	static char video_path[default_char_size] = "match.mp4";
 	ImGui::InputText(u8"视频路径", video_path, default_char_size);
-	ImGui::SameLine();
+
 	if (ImGui::Button(u8"选择视频")) select_type_file("video file\0*.mp4;0*.avi\0\0", video_path);
 	ImGui::SameLine();
 	if (ImGui::Button(u8"开始检测"))
 	{
-		if(g_global_set.net_set.initizlie) analyse_video(video_path);
+		if (!control_info.leave) show_window_tip("请先停止上一个视频的检测");
+		else if (g_global_set.net_set.initizlie)
+		{
+			strncpy(control_info.video_path, video_path, default_char_size);
+			_beginthreadex(NULL, 0, analyse_video, &control_info, 0, NULL);
+		}
 		else show_window_tip("网络没有初始化");
 	}
-
+	ImGui::SameLine();
+	if (ImGui::Button(u8"停止检测")) control_info.leave = true;
 
 	ImGui::End();
 }

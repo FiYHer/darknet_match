@@ -36,6 +36,39 @@ struct object_info
 	float confidence;//置信度
 };
 
+//分析图片相关
+struct picture_detect_info
+{
+	double detect_time;//检测耗时
+
+	float thresh;//阈值
+	float hier_thresh;//阈值
+	float nms;//非极大值抑制
+
+	picture_detect_info() :thresh(0.25f), hier_thresh(0.5f), nms(0.45f) {}
+};
+
+//视频控制相关
+struct video_control
+{
+	//视频路径
+	char video_path[default_char_size];
+
+	//是否退出线程
+	bool leave;
+
+	//检测线程数量
+	int detect_count;
+
+	//显示延迟 读取延迟 检测延迟
+	int show_delay, read_delay, detect_delay;
+
+	video_control() :leave(true), detect_count(4) 
+	{
+		show_delay = read_delay = detect_delay = 10;
+	}
+};
+
 //视频帧相关
 struct video_frame_info
 {
@@ -52,10 +85,11 @@ struct video_frame_info
 //视频处理相关
 struct video_handle_info
 {
-	//记录是否要退出视频读取
+	//是否结束线程
 	bool break_state;
-	bool read_frame;
-	bool detect_frame;
+
+	//相关线程是否还在工作
+	bool read_frame, detect_frame;
 
 	//视频类指针
 	cv::VideoCapture cap;
@@ -69,11 +103,15 @@ struct video_handle_info
 	//关键段用于线程同步
 	CRITICAL_SECTION critical_srction;
 
+	//各线程延迟设置
+	int *show_delay, *read_delay, *detect_delay;
+
 	void initialize()
 	{ 
 		break_state = false;
 		read_frame = detect_frame = true;
 		max_frame_count = 50;
+		show_delay = read_delay = detect_delay = nullptr;
 		InitializeCriticalSection(&critical_srction); 
 	}
 	void entry() { EnterCriticalSection(&critical_srction); }
@@ -93,15 +131,10 @@ struct video_handle_info
 struct net_info_set
 {
 	bool initizlie;//是否初始化了
-	char data_path[default_char_size];//data文件路径
-	char names_path[default_char_size];//names文件路径
-	char cfg_path[default_char_size];//cfg文件路径
-	char weights_path[default_char_size];//权重文件
 	int classes;//类别数量
 
 	char** classes_name;//标签名字
 	struct network match_net;//网络结构
-
 };
 
 //界面显示信息
@@ -140,36 +173,11 @@ struct global_set
 	int width, height, channel;
 	unsigned char* picture_data;
 
-	//检测相关信息
-	int box_number;
-	struct detection* detection_data;
-
-	//图片检测时间
-	double detection_time;
-
-	//线程数量
-	int video_read_frame_threads;
-	int video_detect_frame_threads;
-
-	//延迟设置
-	int show_video_delay;
-	int read_video_delay;
-	int detect_video_delay;
-
 	//界面显示相关
 	struct imgui_set imgui_show_set;
 
 	//网络层相关
 	struct net_info_set net_set;
-
-	global_set()
-	{
-		//一个读取线程就比4个检测线程快了,而且这里有bug
-		video_read_frame_threads = 1;
-		video_detect_frame_threads = 4;
-
-		show_video_delay = read_video_delay = detect_video_delay = 10;
-	}
 };
 extern global_set g_global_set;
 
@@ -201,19 +209,19 @@ bool select_type_file(const char* type_file, char* return_str, int return_str_si
 void read_classes_name(std::vector<std::string>& return_data, const char* path);
 
 //初始化网络
-bool initialize_net();
+bool initialize_net(const char* names_file, const char* cfg_file, const char* weights_file);
 
 //清理网络
 void clear_net();
 
 //加载图片数据
-void read_picture_data(const char* target, image& picture_data, cv::Mat& opencv_data);
+void read_picture_data(const char* target, image& picture_data, cv::Mat& opencv_data, cv::Mat& rgb_data);
 
 //将Mat数据转化为image数据
 void mat_translate_image(const cv::Mat& opencv_data, image& image_data);
 
 //预测图片
-void analyse_picture(const char* target, std::vector<object_info>& object, int show_type = 0);
+void analyse_picture(const char* target, picture_detect_info& detect_info, bool show = false);
 
 //计算对象位置信息
 void get_object_rect(int width, int height, box& box_info, object_info& object);
@@ -228,13 +236,16 @@ std::string string_to_utf8(const char* str);
 void update_picture_texture(cv::Mat& opencv_data);
 
 //分析视频文件
-void analyse_video(const char* video_path);
+unsigned __stdcall analyse_video(void* prt);
 
 //读取视频帧线程
 unsigned __stdcall read_frame_proc(void* prt);
 
 //预测视频帧对象线程
 unsigned __stdcall prediction_frame_proc(void* prt);
+
+
+
 
 
 

@@ -100,7 +100,7 @@ void read_classes_name(std::vector<std::string>& return_data, const char* path)
 	file.close();
 }
 
-bool initialize_net()
+bool initialize_net(const char* names_file, const char* cfg_file, const char* weights_file)
 {
 	if (g_global_set.net_set.initizlie)
 	{
@@ -108,23 +108,19 @@ bool initialize_net()
 		return true;
 	}
 
-	//设置显示工作
-	int gpu_index;
-	cudaGetDeviceCount(&gpu_index);
-	check_serious_error(gpu_index, "检测显卡失败");
-	cuda_set_device(gpu_index - 1);
+	//设置显卡工作
+	cuda_set_device(get_gpu_count() - 1);
 	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
 
 	//读取标签数据
 	int classes_number;
-	g_global_set.net_set.classes_name = get_labels_custom(g_global_set.net_set.names_path, &classes_number);
-	check_serious_error(classes_number == g_global_set.net_set.classes, "标签数量不对应");
+	g_global_set.net_set.classes_name = get_labels_custom((char*)names_file, &classes_number);
 
 	//读取网络数据
-	g_global_set.net_set.match_net = parse_network_cfg_custom(g_global_set.net_set.cfg_path, 1, 1);
+	g_global_set.net_set.match_net = parse_network_cfg_custom((char*)cfg_file, 1, 1);
 
 	//加载权重文件
-	load_weights(&g_global_set.net_set.match_net, g_global_set.net_set.weights_path);
+	load_weights(&g_global_set.net_set.match_net, (char*)weights_file);
 
 	//融合卷积
 	fuse_conv_batchnorm(g_global_set.net_set.match_net);
@@ -132,11 +128,14 @@ bool initialize_net()
 	//计算二进制权重
 	calculate_binary_weights(g_global_set.net_set.match_net);
 
-	//再次检测标签
+	//检测标签
 	check_serious_error(g_global_set.net_set.match_net.layers[g_global_set.net_set.match_net.n - 1].classes == classes_number, "和yolo层标签数不符");
+	g_global_set.net_set.classes = classes_number;
 
 	//设置状态
 	g_global_set.net_set.initizlie = true;
+
+	//返回结果
 	return true;
 }
 
@@ -147,21 +146,22 @@ void clear_net()
 	g_global_set.net_set.initizlie = false;
 }
 
-void read_picture_data(const char* target, image& picture_data, cv::Mat& opencv_data)
+void read_picture_data(const char* target, image& picture_data, cv::Mat& opencv_data, cv::Mat& rgb_data)
 {
 	//记载图片数据
 	opencv_data = cv::imread(target);
-	if (opencv_data.empty())
-	{
-		show_window_tip("图片文件读取失败");
-		return;
-	}
+	if (opencv_data.empty()) return;
+	
+	//转化颜色通道
+	if (opencv_data.channels() == 3) cv::cvtColor(opencv_data, rgb_data, cv::COLOR_RGB2BGR);
+	else if (opencv_data.channels() == 4) cv::cvtColor(opencv_data, rgb_data, cv::COLOR_RGBA2BGRA);
+	else opencv_data.copyTo(rgb_data);
 
 	//获取图片信息
-	int width = opencv_data.cols, height = opencv_data.rows, channel = opencv_data.channels();
+	int width = rgb_data.cols, height = rgb_data.rows, channel = rgb_data.channels();
 
 	//转化为image结构顺便均值化
-	mat_translate_image(opencv_data, picture_data);
+	mat_translate_image(rgb_data, picture_data);
 }
 
 void mat_translate_image(const cv::Mat& opencv_data, image& image_data)
@@ -184,12 +184,17 @@ void mat_translate_image(const cv::Mat& opencv_data, image& image_data)
 	}
 }
 
-void analyse_picture(const char* target, std::vector<object_info>& object, int show_type /*= 0*/)
+void analyse_picture(const char* target, picture_detect_info& detect_info, bool show)
 {
 	//加载图片
 	image original_data;
-	cv::Mat opencv_data;
-	read_picture_data(target, original_data, opencv_data);
+	cv::Mat opencv_data, rgb_data;
+	read_picture_data(target, original_data, opencv_data, rgb_data);
+	if (opencv_data.empty())
+	{
+		show_window_tip("图片打开失败");
+		return;
+	}
 
 	//将图片数据进行缩放
 	image resize_data = resize_image(original_data, g_global_set.net_set.match_net.w, g_global_set.net_set.match_net.h);
@@ -201,55 +206,46 @@ void analyse_picture(const char* target, std::vector<object_info>& object, int s
 	network_predict(g_global_set.net_set.match_net, resize_data.data);
 
 	//计算预测需要的时间
-	g_global_set.detection_time = ((double)get_time_point() - this_time) / 1000;
-
-	//释放上一次检测得到的内存
-	if (g_global_set.detection_data)
-	{
-		free_detections(g_global_set.detection_data, g_global_set.box_number);
-		g_global_set.detection_data = nullptr;
-		g_global_set.box_number = 0;
-	}
+	detect_info.detect_time = ((double)get_time_point() - this_time) / 1000;
 
 	//获取方框数量
-	g_global_set.detection_data = get_network_boxes(&g_global_set.net_set.match_net,
-		original_data.w, original_data.h, .25f, .5f, 0, 1, &g_global_set.box_number, 0);
+	int box_number;
+	detection* detection_data = get_network_boxes(&g_global_set.net_set.match_net,
+		original_data.w, original_data.h, detect_info.thresh, detect_info.hier_thresh, 0, 1, &box_number, 0);
 
 	//非极大值抑制
-	do_nms_sort(g_global_set.detection_data, g_global_set.box_number, g_global_set.net_set.classes, .4f);
+	do_nms_sort(detection_data, box_number, g_global_set.net_set.classes, detect_info.nms);
 
 	//获取有效的方框数量
 	int useble_box = 0;
-	detection_with_class* detector_data = get_actual_detections(g_global_set.detection_data,
-		g_global_set.box_number, .25f, &useble_box, g_global_set.net_set.classes_name);
-
-	//清空上一次的对象位置数据
-	object.clear();
+	detection_with_class* detector_data = get_actual_detections(detection_data,
+		box_number, detect_info.thresh, &useble_box, g_global_set.net_set.classes_name);
 
 	//对每一个对象
 	for (int i = 0; i < useble_box; i++)
 	{
-		object_info temp_object;
-		temp_object.class_index = detector_data[i].best_class;//获取类型
-		temp_object.confidence = detector_data[i].det.prob[detector_data[i].best_class] * 100;//获取置信度
+		int index = detector_data[i].best_class;//获取类型
+		int confid = detector_data[i].det.prob[detector_data[i].best_class] * 100;//获取置信度
 
 		//计算位置信息
+		object_info temp_object;
 		get_object_rect(original_data.w, original_data.h, detector_data[i].det.bbox, temp_object);
-
-		//加入列表
-		object.push_back(std::move(temp_object));
 
 		//绘制方框
 		draw_object_rect(opencv_data, temp_object.left, temp_object.top, temp_object.right, temp_object.down);
+
+		//绘制字体
+		cv::putText(opencv_data, cv::format("%s %d", g_global_set.net_set.classes_name[index], confid), cv::Point(temp_object.left, temp_object.top), cv::FONT_HERSHEY_COMPLEX, .50f, cv::Scalar(0, 0, 255), 0);
 	}
 
 	//释放内存
+	free_detections(detection_data, box_number);
 	free_image(original_data);
 	free_image(resize_data);
 	free(detector_data);
 
 	//opencv界面显示
-	if (!show_type)
+	if (show)
 	{
 		cv::imshow(target, opencv_data);
 		cv::waitKey(1);
@@ -260,6 +256,7 @@ void analyse_picture(const char* target, std::vector<object_info>& object, int s
 
 	//清空数据
 	opencv_data.release();
+	rgb_data.release();
 }
 
 void get_object_rect(int width, int height, box& box_pos, object_info& object)
@@ -368,45 +365,53 @@ void update_picture_texture(cv::Mat& opencv_data)
 	}
 }
 
-void analyse_video(const char* video_path)
+unsigned __stdcall  analyse_video(void* prt)
 {
+	//转化
+	video_control* control_ptr = (video_control*)prt;
+	control_ptr->leave = false;
+
 	//打开视频文件
 	video_handle_info video_info;
-	video_info.cap.open(0);
+	video_info.cap.open(control_ptr->video_path);
 	if (!video_info.cap.isOpened())
 	{
 		show_window_tip("打开视频文件失败");
-		return;
+		control_ptr->leave = true;
+		return 0;
 	}
 
 	//初始化相关信息
 	video_info.initialize();
 
+	//延迟设置
+	video_info.show_delay = &control_ptr->show_delay;
+	video_info.read_delay = &control_ptr->read_delay;
+	video_info.detect_delay = &control_ptr->detect_delay;
+
 	//创建线程
-	int read_threads = g_global_set.video_read_frame_threads;
-	int detect_threas = g_global_set.video_detect_frame_threads;
-	HANDLE* read_table = new HANDLE[read_threads];
-	HANDLE* detect_table = new HANDLE[detect_threas];
-	check_serious_error(read_table && detect_table, "申请线程句柄内存失败");
-	for (int i = 0; i < read_threads; i++)
-	{
-		read_table[i] = (HANDLE)_beginthreadex(NULL, 0, read_frame_proc, &video_info, 0, NULL);
-		check_serious_error(read_table[i], "创建读取视频帧线程失败");
-	}
+	int detect_threas = control_ptr->detect_count;
+	HANDLE read_handle;
+	HANDLE* detect_handle = new HANDLE[detect_threas];
+	check_serious_error(detect_handle, "申请线程句柄内存失败");
+
+	//创建读取线程
+	read_handle = (HANDLE)_beginthreadex(NULL, 0, read_frame_proc, &video_info, 0, NULL);
+	check_serious_error(read_handle, "创建读取视频帧线程失败");
+
+	//创建检测线程
 	for (int i = 0; i < detect_threas; i++)
 	{
-		detect_table[i] = (HANDLE)_beginthreadex(NULL, 0, prediction_frame_proc, &video_info, 0, NULL);
-		check_serious_error(detect_table[i], "创建检测视频帧线程失败");
+		detect_handle[i] = (HANDLE)_beginthreadex(NULL, 0, prediction_frame_proc, &video_info, 0, NULL);
+		check_serious_error(detect_handle[i], "创建检测视频帧线程失败");
 	}
-
-	//延迟
-	int& delay = g_global_set.show_video_delay;
 
 	double fps = 0, before = 0;
 
 	//循环显示视频帧
-	while (true)
+	while (!control_ptr->leave && video_info.detect_frame)
 	{
+		//视频帧指针
 		video_frame_info* video_ptr = nullptr;
 
 		//获取控制权
@@ -420,7 +425,7 @@ void analyse_video(const char* video_path)
 			
 			//能显示就显示
 			if (video_ptr->display) video_info.detect_datas.erase(video_info.detect_datas.begin());
-			else video_ptr = nullptr;
+			else video_ptr = nullptr;//不能显示就什么都不做
 		}
 
 		//释放控制权
@@ -434,29 +439,40 @@ void analyse_video(const char* video_path)
 			fps = fps * 0.9 + curr * 0.1;
 			before = after;
 			static char fps_char[default_char_size];
-			sprintf(fps_char, "Fps is : %.2lf", fps);
-			cv::putText(video_ptr->original_frame, fps_char, cv::Point(50, 50), cv::FONT_HERSHEY_COMPLEX, 2, cv::Scalar(255, 0, 0));
+			sprintf(fps_char, "fps is : %d", (int)fps);
+			cv::putText(video_ptr->original_frame, fps_char, cv::Point(50, 50), cv::FONT_HERSHEY_COMPLEX, 2, cv::Scalar(0, 0, 255));
 
 			//显示结果
-			cv::imshow(video_path, video_ptr->original_frame);
-			cv::waitKey(delay);
-
-			//释放视频帧
-			video_ptr->original_frame.release();
+			cv::imshow(control_ptr->video_path, video_ptr->original_frame);
 		}
-		else if(!video_info.detect_frame) break;
-		else Sleep(delay);
+
+		//显示
+		cv::waitKey(*video_info.show_delay);
+
+		//释放视频帧内存
+		if (video_ptr)
+		{
+			video_ptr->original_frame.release();
+			delete video_ptr;
+		}
 	}
 
 	//关闭窗口
-	cv::destroyWindow(video_path);
+	cv::destroyWindow(control_ptr->video_path);
 
 	//等待线程的全部退出
-	WaitForMultipleObjects(read_threads, read_table, TRUE, INFINITE);
-	WaitForMultipleObjects(detect_threas, detect_table, TRUE, INFINITE);
+	video_info.break_state = true;
+	video_info.read_frame = false;
+	video_info.detect_frame = false;
+	WaitForSingleObject(read_handle, 1000 * 3);
+	WaitForMultipleObjects(detect_threas, detect_handle, TRUE, 1000 * 3);
 
-	//释放
+	//释放相关内存
 	video_info.clear();
+
+	//设置退出标志
+	control_ptr->leave = true;
+	return 0;
 }
 
 unsigned __stdcall read_frame_proc(void* prt)
@@ -464,22 +480,16 @@ unsigned __stdcall read_frame_proc(void* prt)
 	//获取
 	video_handle_info* video_info = (video_handle_info*)prt;
 
-	//延迟！
-	int& delay = g_global_set.read_video_delay;
-
 	//开始循环读取视频帧
-	while (video_info->read_frame)
+	while (video_info->read_frame && !video_info->break_state)
 	{
-		//要求退出
-		if(video_info->break_state) break;
-
 		//防止读取太快检测不过来而占用太多内存
 		if (video_info->max_frame_count > video_info->detect_datas.size())
 		{
 			//申请内存
 			video_frame_info* video_ptr = new video_frame_info;
 			check_serious_error(video_ptr, "申请保存视频帧内存失败");
-			video_ptr->detecting = false;//没检测
+			video_ptr->detecting = false;//还没检测
 			video_ptr->display = false;//不能显示
 
 			//读取一帧视频
@@ -496,8 +506,10 @@ unsigned __stdcall read_frame_proc(void* prt)
 		}
 
 		//放过CPU
-		Sleep(delay);
+		Sleep(*video_info->read_delay);
 	}
+
+	//设置读取标志
 	video_info->read_frame = false;
 	return 0;
 }
@@ -515,15 +527,10 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 	//类型数量
 	int classes = g_global_set.net_set.classes;
 
-	//延迟
-	int& delay = g_global_set.detect_video_delay;
-
 	//开始检测视频帧
-	while (video_info->detect_frame)
+	while (video_info->detect_frame && video_info->read_frame && !video_info->break_state)
 	{
-		//要求退出
-		if(video_info->break_state) break;
-
+		//
 		video_frame_info* video_ptr = nullptr;
 
 		//获取控制权
@@ -532,11 +539,11 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 		//找到一个还没开始检测的视频帧
 		for (int i = 0; i < video_info->detect_datas.size(); i++)
 		{
-			if (video_info->detect_datas[i]->detecting == false)
+			if (video_info->detect_datas[i]->detecting == false)//找到没检测的视频帧
 			{
-				video_info->detect_datas[i]->detecting = true;
-				video_ptr = video_info->detect_datas[i];
-				break;
+				video_info->detect_datas[i]->detecting = true;//标记为正在检测
+				video_ptr = video_info->detect_datas[i];//拿到地址
+				break;//退出循环
 			}
 		}
 
@@ -549,17 +556,21 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			//进行缩放
 			cv::Mat picture_data = cv::Mat(input_height, input_width, CV_8UC(input_channel));
 			cv::resize(video_ptr->original_frame, picture_data, picture_data.size(), 0, 0, cv::INTER_LINEAR);
+			
+			//颜色格式转换
+			cv::Mat rgb_data;
+			cv::cvtColor(picture_data, rgb_data, cv::COLOR_RGB2BGR);
 
-			//将图像转换
+			//将图像转换为image
 			image original_data;
-			mat_translate_image(picture_data, original_data);
+			mat_translate_image(rgb_data, original_data);
 
 			//网络预测
 			network_predict(g_global_set.net_set.match_net, original_data.data);
 
 			//获取方框数量
 			int box_count = 0;
-			detection* detection_data = get_network_boxes(&g_global_set.net_set.match_net, input_width, input_height, .45f, .45f, 0, 1, &box_count, 0);
+			detection* detection_data = get_network_boxes(&g_global_set.net_set.match_net, input_width, input_height, .25f, .45f, 0, 1, &box_count, 0);
 
 			//进行非极大值抑制
 			do_nms_sort(detection_data, box_count, classes, .4f);
@@ -571,6 +582,7 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			//操作每一个对象
 			for (int i = 0; i < useful_box; i++)
 			{
+				//对象
 				object_info object;
 
 				//获取类别索引
@@ -592,20 +604,26 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			//释放图像数据
 			free_image(original_data);
 			picture_data.release();
+			rgb_data.release();
 
 			//释放内存
 			free_detections(detection_data, box_count);
 			free(class_data);
-
-			//延迟
-			Sleep(delay);
 		}
-		else if(!video_info->read_frame) break;//视频读取完了
-		else Sleep(delay);//没有图像就暂停1毫秒
+
+		Sleep(*video_info->detect_delay);//暂停
 	}
+
+	//设置检测线程状态
 	video_info->detect_frame = false;
 	return 0;
 }
+
+
+
+
+
+
 
 
 std::vector<std::string> get_path_from_str(const char* str, const char* file_type)
