@@ -652,13 +652,13 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 	int names_size = 0;
 
 	//读取标签名字
-	char **names = get_labels_custom("h:\\delete\\coco.names", &names_size); //get_labels(name_list);
+	char **names = get_labels_custom("h:\\test\\coco.names", &names_size); //get_labels(name_list);
 
 	//读取网络配置
-	network net = parse_network_cfg_custom("h:\\delete\\yolov3.cfg", 1, 1); // set batch=1
+	network net = parse_network_cfg_custom("h:\\test\\yolov3.cfg", 1, 1); // set batch=1
 
 	//加载权重文件
-	load_weights(&net, "h:\\delete\\yolov3.weights");
+	load_weights(&net, "h:\\test\\yolov3.weights");
 
 	//融合卷积
 	fuse_conv_batchnorm(net);
@@ -706,6 +706,8 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 			std::string file_name = jpg_name.substr(0, jpg_name.rfind('.'));
 			file_name += ".txt";
 
+			int useful_count = 0;
+
 			//写入位置
 			std::fstream file(file_name, std::fstream::out | std::fstream::trunc);
 			if (file.is_open())
@@ -729,16 +731,21 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 							sprintf(format, "%d %f %f %f %f\n", it.second, b.x, b.y, b.w, b.h);
 							file.write(format, strlen(format));
 
+							//计数
+							useful_count++;
+
 							//退出当前循环
 							break;
 						}
 					}
 				}
-
 			}
 
 			//关闭文件
 			file.close();
+
+			//没有对象就删除文件
+			if (useful_count == 0) DeleteFileA(file_name.c_str());
 		}
 
 		//释放内存

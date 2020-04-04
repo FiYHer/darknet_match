@@ -11,7 +11,7 @@ global_set g_global_set;
 //	//设置显示工作
 //	int gpu_index;
 //	cudaGetDeviceCount(&gpu_index);
-//	cuda_set_device(gpu_index - 1);
+//	cuda_set_device(0);
 //	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
 //
 //	std::map<std::string, int> class_names;
@@ -25,15 +25,14 @@ global_set g_global_set;
 //	class_names.insert({ "traffic light",5 });
 //	class_names.insert({ "dog",6 });
 //
-//	picture_to_label("H:\\TestPicture\\自行车_ivsky", class_names);
-//
+//	picture_to_label("H:\\CarPicture\\run_load2", class_names);
 //	printf("标记完成!------------------------------------------------------");
 //	getchar();
 //	return 0;
 //}
 
-int main(int argc,char* arv[])
-//int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+
+int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
 	register_window_struct();
 	create_window();
