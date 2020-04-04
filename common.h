@@ -36,6 +36,25 @@ struct object_info
 	float confidence;//置信度
 };
 
+//颜色信息
+struct color_info
+{
+	//方框颜色
+	float box_rgb[3];
+
+	//字体颜色
+	float font_rgb[3];
+
+	//厚度
+	float thickness;
+
+	color_info() : thickness(3.0f)
+	{
+		box_rgb[0] = box_rgb[2] = box_rgb[1] = 100.0f;
+		font_rgb[0] = font_rgb[1] = font_rgb[2] = 200.0f;
+	}
+};
+
 //分析图片相关
 struct picture_detect_info
 {
@@ -178,6 +197,9 @@ struct global_set
 
 	//网络层相关
 	struct net_info_set net_set;
+
+	//颜色相关
+	color_info color_set;
 };
 extern global_set g_global_set;
 
@@ -222,6 +244,9 @@ void mat_translate_image(const cv::Mat& opencv_data, image& image_data);
 
 //预测图片
 void analyse_picture(const char* target, picture_detect_info& detect_info, bool show = false);
+
+//绘制方框和类型
+void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name);
 
 //计算对象位置信息
 void get_object_rect(int width, int height, box& box_info, object_info& object);

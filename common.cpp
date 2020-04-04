@@ -108,6 +108,27 @@ bool initialize_net(const char* names_file, const char* cfg_file, const char* we
 		return true;
 	}
 
+	//判断names文件是否存在
+	if (!names_file || !strstr(names_file, ".names") || access(names_file, 0) == -1)
+	{
+		show_window_tip("names文件不存在");
+		return false;
+	}
+
+	//判断cfg文件是否存在
+	if (!cfg_file || !strstr(cfg_file, ".cfg") || access(cfg_file, 0) == -1)
+	{
+		show_window_tip("cfg文件不存在");
+		return false;
+	}
+
+	//判断weights文件是否存在
+	if (!weights_file || !strstr(weights_file, ".weights") || access(weights_file, 0) == -1)
+	{
+		show_window_tip("weights文件不存在");
+		return false;
+	}
+
 	//设置显卡工作
 	cuda_set_device(get_gpu_count() - 1);
 	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
@@ -227,15 +248,18 @@ void analyse_picture(const char* target, picture_detect_info& detect_info, bool 
 		int index = detector_data[i].best_class;//获取类型
 		int confid = detector_data[i].det.prob[detector_data[i].best_class] * 100;//获取置信度
 
+		char format[1024];
+		sprintf(format, "%s %d", g_global_set.net_set.classes_name[index], confid);
+		draw_boxs_and_classes(opencv_data, detector_data[i].det.bbox, format);
 		//计算位置信息
-		object_info temp_object;
-		get_object_rect(original_data.w, original_data.h, detector_data[i].det.bbox, temp_object);
+		//object_info temp_object;
+		//get_object_rect(original_data.w, original_data.h, detector_data[i].det.bbox, temp_object);
 
 		//绘制方框
-		draw_object_rect(opencv_data, temp_object.left, temp_object.top, temp_object.right, temp_object.down);
+		//draw_object_rect(opencv_data, temp_object.left, temp_object.top, temp_object.right, temp_object.down);
 
 		//绘制字体
-		cv::putText(opencv_data, cv::format("%s %d", g_global_set.net_set.classes_name[index], confid), cv::Point(temp_object.left, temp_object.top), cv::FONT_HERSHEY_COMPLEX, .50f, cv::Scalar(0, 0, 255), 0);
+		//cv::putText(opencv_data, cv::format("%s %d", g_global_set.net_set.classes_name[index], confid), cv::Point(temp_object.left, temp_object.top), cv::FONT_HERSHEY_COMPLEX, .50f, cv::Scalar(0, 0, 255), 0);
 	}
 
 	//释放内存
@@ -257,6 +281,61 @@ void analyse_picture(const char* target, picture_detect_info& detect_info, bool 
 	//清空数据
 	opencv_data.release();
 	rgb_data.release();
+}
+
+void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name)
+{
+	//计算方框位置
+	if (std::isnan(box_info.w) || std::isinf(box_info.w)) box_info.w = 0.5;
+	if (std::isnan(box_info.h) || std::isinf(box_info.h)) box_info.h = 0.5;
+	if (std::isnan(box_info.x) || std::isinf(box_info.x)) box_info.x = 0.5;
+	if (std::isnan(box_info.y) || std::isinf(box_info.y)) box_info.y = 0.5;
+
+	box_info.w = (box_info.w < 1) ? box_info.w : 1;
+	box_info.h = (box_info.h < 1) ? box_info.h : 1;
+	box_info.x = (box_info.x < 1) ? box_info.x : 1;
+	box_info.y = (box_info.y < 1) ? box_info.y : 1;
+
+	int left = (box_info.x - box_info.w / 2.)*picture_data.cols;
+	int right = (box_info.x + box_info.w / 2.)*picture_data.cols;
+	int top = (box_info.y - box_info.h / 2.)*picture_data.rows;
+	int bot = (box_info.y + box_info.h / 2.)*picture_data.rows;
+
+	if (left < 0) left = 0;
+	if (right > picture_data.cols - 1) right = picture_data.cols - 1;
+	if (top < 0) top = 0;
+	if (bot > picture_data.rows - 1) bot = picture_data.rows - 1;
+
+	//计算字体大小
+	float font_size = picture_data.rows / 1000.0f;
+	cv::Size text_size = cv::getTextSize(name, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, 1, 0);
+
+	//方框颜色
+	float box_rgb[3]{ g_global_set.color_set.box_rgb[0] * 255.0f, g_global_set.color_set.box_rgb[1] * 255.0f,g_global_set.color_set.box_rgb[2] * 255.0f };
+	
+	//字体颜色
+	float font_rgb[3]{ g_global_set.color_set.font_rgb[0] * 255.0f,g_global_set.color_set.font_rgb[1] * 255.0f ,g_global_set.color_set.font_rgb[2] * 255.0f };
+
+	//线条粗细
+	float thickness = g_global_set.color_set.thickness;
+
+	//绘制人物方框
+	cv::rectangle(picture_data, cv::Point(left, top), cv::Point(right, bot), cv::Scalar(box_rgb[2], box_rgb[1], box_rgb[0]), thickness, 8, 0);
+
+	//计算字体方框位置
+	cv::Point font_left{ left,top };
+	cv::Point font_right{ right,top + text_size.height * 2 };
+	if (font_right.y > picture_data.rows) font_right.y = picture_data.rows - 1;
+
+	//绘制字体方框
+	cv::rectangle(picture_data, font_left, font_right, cv::Scalar(font_rgb[2], font_rgb[1], font_rgb[0]), thickness, 8, 0);
+	cv::rectangle(picture_data, font_left, font_right, cv::Scalar(font_rgb[2], font_rgb[1], font_rgb[0]), cv::FILLED, 8, 0);
+
+	//绘制字体
+	cv::Point pos{ font_left.x, font_left.y + text_size.height };
+	if (pos.x + text_size.width > picture_data.cols) pos.x = picture_data.cols - text_size.width - 1;
+	if (pos.y + text_size.height > picture_data.rows) pos.y = picture_data.rows - text_size.height - 1;
+	cv::putText(picture_data, name, pos, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, cv::Scalar(255 - font_rgb[2], 255 - font_rgb[1], 255 - font_rgb[0]), 2 * font_size, cv::LINE_AA);
 }
 
 void get_object_rect(int width, int height, box& box_pos, object_info& object)

@@ -234,21 +234,20 @@ void imgui_show_manager()
 
 	//显示显卡相关信息
 	for (int i = 0; i < gpu_count; i++)
-		ImGui::BulletText(u8"GPU型号[%s]   全局内存 [%d]   共享内存[%d]",
-			gpu_info[i].name, gpu_info[i].totalGlobalMem, gpu_info[i].sharedMemPerBlock);
+		ImGui::BulletText(u8"GPU型号  [%s]", gpu_info[i].name);
 
 	//获取系统类型
 	static int os_type = get_os_type();
-	if(os_type == -1) ImGui::BulletText(u8"系统类型[未知]");
-	else ImGui::BulletText(u8"系统类型[Windows %d]", os_type);
+	if(os_type == -1) ImGui::BulletText(u8"系统类型  [未知]");
+	else ImGui::BulletText(u8"系统类型  [Windows %d]", os_type);
 
 	//显示CPU核心数
 	static int cpu_kernel = get_cpu_kernel();
-	ImGui::BulletText(u8"CPU核心[%d]", cpu_kernel);
+	ImGui::BulletText(u8"CPU核心  [%d]", cpu_kernel);
 
 	//显示内存总数
 	static int phy_memory = get_physical_memory();
-	ImGui::BulletText(u8"物理内存[%dg]", phy_memory);
+	ImGui::BulletText(u8"物理内存  [%dg]", phy_memory);
 
 	ImGui::Separator();
 	if (ImGui::Button(u8"文件配置窗口")) g_global_set.imgui_show_set.show_file_set_window = true;
@@ -286,8 +285,8 @@ void imgui_file_set_window()
 	
 	ImGui::Separator();
 	static bool load_net = false;
-	if (!load_net) ImGui::TextColored(ImVec4(0, 0, 255, 255), u8"没有初始化网络 网络初始化会卡顿<=20秒 请等待....");
-	else ImGui::TextColored(ImVec4(0, 255, 0, 255), u8"初始化网络成功....");
+	if (!load_net) ImGui::TextColored(ImVec4(0, 0, 255, 255), u8"网络初始化会卡顿20秒 请等待....");
+	else ImGui::TextColored(ImVec4(255, 0, 0, 255), u8"初始化网络成功....");
 
 	if (ImGui::Button(u8"初始化网络") && !load_net) load_net = initialize_net(names_path, cfg_path, weights_path);
 	ImGui::SameLine();
@@ -304,33 +303,29 @@ void imgui_test_picture_window()
 {
 	if (!g_global_set.imgui_show_set.show_test_picture_window) return;
 
-	ImGui::SetNextWindowSize(ImVec2(800, 500), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
 	ImGui::Begin(u8"智能交通系统  -  测试图片窗口",&g_global_set.imgui_show_set.show_test_picture_window);
 
-	auto func = [](float& value, const char* str)
-	{
-		ImGui::Text("%s [%f]", string_to_utf8(str).c_str(), value);
-		ImGui::SameLine();
-
-		float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
-		ImGui::PushButtonRepeat(true);
-		if (ImGui::ArrowButton("##left", ImGuiDir_Left)) { value -= 0.2f; }
-		ImGui::SameLine(0.0f, spacing);
-		if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { value += 0.2f; }
-		ImGui::PopButtonRepeat();
-	};
-
-	//图片检测控制
+	static bool show_window = false;
 	static picture_detect_info detect_info;
 
-	func(detect_info.thresh, "thresh");
-	ImGui::SameLine();
-	func(detect_info.hier_thresh, "hier_thresh");
-	ImGui::SameLine();
-	func(detect_info.nms, "nms");
-	ImGui::SameLine();
-	static bool show_window = false;
-	ImGui::Checkbox(u8"显示窗口", &show_window);
+	//图片检测控制
+	if (ImGui::CollapsingHeader(u8"设置"))
+	{
+		ImGui::InputFloat(u8"thresh", &detect_info.thresh, 0.01f, 1.0f, "%.3f");
+		ImGui::InputFloat(u8"hier_thresh", &detect_info.hier_thresh, 0.01f, 1.0f, "%.3f");
+		ImGui::InputFloat(u8"nms", &detect_info.nms, 0.01f, 1.0f, "%.3f");
+
+		ImGui::Checkbox(u8"显示窗口", &show_window);
+	}
+
+	//颜色控制
+	if (ImGui::CollapsingHeader(u8"颜色"))
+	{
+		ImGui::ColorEdit3(u8"方框颜色", g_global_set.color_set.box_rgb);
+		ImGui::ColorEdit3(u8"字体颜色", g_global_set.color_set.font_rgb);
+		ImGui::InputFloat(u8"线条厚度", &g_global_set.color_set.thickness, 0.01f, 1.0f, "%.3f");
+	}
 
 	static char target_picture[default_char_size] = "match.jpg";
 	ImGui::InputText(u8"测试图片", target_picture, default_char_size);
@@ -354,30 +349,17 @@ void imgui_test_video_window()
 {
 	if (!g_global_set.imgui_show_set.show_test_video_window) return;
 
-	ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiCond_FirstUseEver);
 	ImGui::Begin(u8"智能交通系统  -  测试视频窗口",&g_global_set.imgui_show_set.show_test_video_window);
-
-	auto func = [](int& value, const char* str)
-	{
-		ImGui::Text("%s [%d]", string_to_utf8(str).c_str(), value);
-		ImGui::SameLine();
-
-		float spacing = ImGui::GetStyle().ItemInnerSpacing.x;
-		ImGui::PushButtonRepeat(true);
-		if (ImGui::ArrowButton("##left", ImGuiDir_Left)) { value--; }
-		ImGui::SameLine(0.0f, spacing);
-		if (ImGui::ArrowButton("##right", ImGuiDir_Right)) { value++; }
-		ImGui::PopButtonRepeat();
-	};
 
 	//视频控制
 	static video_control control_info;
-
-	func(control_info.show_delay, "显示延迟");
-	ImGui::SameLine();
-	func(control_info.read_delay, "读取延迟");
-	ImGui::SameLine();
-	func(control_info.detect_delay, "检测延迟");
+	if (ImGui::CollapsingHeader(u8"延迟"))
+	{
+		ImGui::InputInt(u8"显示延迟", &control_info.show_delay);
+		ImGui::InputInt(u8"读取延迟", &control_info.show_delay);
+		ImGui::InputInt(u8"检测延迟", &control_info.show_delay);
+	}
 
 	static char video_path[default_char_size] = "match.mp4";
 	ImGui::InputText(u8"视频路径", video_path, default_char_size);
