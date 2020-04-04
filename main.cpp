@@ -307,7 +307,7 @@ void imgui_test_picture_window()
 	ImGui::Begin(u8"÷«ƒ‹ΩªÕ®œµÕ≥  -  ≤‚ ‘Õº∆¨¥∞ø⁄",&g_global_set.imgui_show_set.show_test_picture_window);
 
 	static bool show_window = false;
-	static picture_detect_info detect_info;
+	static set_detect_info detect_info;
 
 	//Õº∆¨ºÏ≤‚øÿ÷∆
 	if (ImGui::CollapsingHeader(u8"…Ë÷√"))
@@ -357,8 +357,8 @@ void imgui_test_video_window()
 	if (ImGui::CollapsingHeader(u8"—”≥Ÿ"))
 	{
 		ImGui::InputInt(u8"œ‘ æ—”≥Ÿ", &control_info.show_delay);
-		ImGui::InputInt(u8"∂¡»°—”≥Ÿ", &control_info.show_delay);
-		ImGui::InputInt(u8"ºÏ≤‚—”≥Ÿ", &control_info.show_delay);
+		ImGui::InputInt(u8"∂¡»°—”≥Ÿ", &control_info.read_delay);
+		ImGui::InputInt(u8"ºÏ≤‚—”≥Ÿ", &control_info.detect_delay);
 	}
 
 	static char video_path[default_char_size] = "match.mp4";

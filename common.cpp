@@ -130,7 +130,8 @@ bool initialize_net(const char* names_file, const char* cfg_file, const char* we
 	}
 
 	//设置显卡工作
-	cuda_set_device(get_gpu_count() - 1);
+	g_global_set.net_set.match_net.gpu_index = cuda_get_device();
+	cuda_set_device(g_global_set.net_set.match_net.gpu_index);
 	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
 
 	//读取标签数据
@@ -205,7 +206,7 @@ void mat_translate_image(const cv::Mat& opencv_data, image& image_data)
 	}
 }
 
-void analyse_picture(const char* target, picture_detect_info& detect_info, bool show)
+void analyse_picture(const char* target, set_detect_info& detect_info, bool show)
 {
 	//加载图片
 	image original_data;
@@ -245,21 +246,16 @@ void analyse_picture(const char* target, picture_detect_info& detect_info, bool 
 	//对每一个对象
 	for (int i = 0; i < useble_box; i++)
 	{
-		int index = detector_data[i].best_class;//获取类型
-		int confid = detector_data[i].det.prob[detector_data[i].best_class] * 100;//获取置信度
+		//获取类型
+		int index = detector_data[i].best_class;
 
+		//获取置信度
+		int confid = detector_data[i].det.prob[detector_data[i].best_class] * 100;
+
+		//绘制信息
 		char format[1024];
 		sprintf(format, "%s %d", g_global_set.net_set.classes_name[index], confid);
 		draw_boxs_and_classes(opencv_data, detector_data[i].det.bbox, format);
-		//计算位置信息
-		//object_info temp_object;
-		//get_object_rect(original_data.w, original_data.h, detector_data[i].det.bbox, temp_object);
-
-		//绘制方框
-		//draw_object_rect(opencv_data, temp_object.left, temp_object.top, temp_object.right, temp_object.down);
-
-		//绘制字体
-		//cv::putText(opencv_data, cv::format("%s %d", g_global_set.net_set.classes_name[index], confid), cv::Point(temp_object.left, temp_object.top), cv::FONT_HERSHEY_COMPLEX, .50f, cv::Scalar(0, 0, 255), 0);
 	}
 
 	//释放内存
@@ -286,16 +282,6 @@ void analyse_picture(const char* target, picture_detect_info& detect_info, bool 
 void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name)
 {
 	//计算方框位置
-	if (std::isnan(box_info.w) || std::isinf(box_info.w)) box_info.w = 0.5;
-	if (std::isnan(box_info.h) || std::isinf(box_info.h)) box_info.h = 0.5;
-	if (std::isnan(box_info.x) || std::isinf(box_info.x)) box_info.x = 0.5;
-	if (std::isnan(box_info.y) || std::isinf(box_info.y)) box_info.y = 0.5;
-
-	box_info.w = (box_info.w < 1) ? box_info.w : 1;
-	box_info.h = (box_info.h < 1) ? box_info.h : 1;
-	box_info.x = (box_info.x < 1) ? box_info.x : 1;
-	box_info.y = (box_info.y < 1) ? box_info.y : 1;
-
 	int left = (box_info.x - box_info.w / 2.)*picture_data.cols;
 	int right = (box_info.x + box_info.w / 2.)*picture_data.cols;
 	int top = (box_info.y - box_info.h / 2.)*picture_data.rows;
@@ -307,7 +293,7 @@ void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name
 	if (bot > picture_data.rows - 1) bot = picture_data.rows - 1;
 
 	//计算字体大小
-	float font_size = picture_data.rows / 1000.0f;
+	float font_size = picture_data.rows / 1500.0f;
 	cv::Size text_size = cv::getTextSize(name, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, 1, 0);
 
 	//方框颜色
@@ -323,9 +309,9 @@ void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name
 	cv::rectangle(picture_data, cv::Point(left, top), cv::Point(right, bot), cv::Scalar(box_rgb[2], box_rgb[1], box_rgb[0]), thickness, 8, 0);
 
 	//计算字体方框位置
-	cv::Point font_left{ left,top };
-	cv::Point font_right{ right,top + text_size.height * 2 };
-	if (font_right.y > picture_data.rows) font_right.y = picture_data.rows - 1;
+	cv::Point font_left{ left,top - text_size.height * 2 };
+	cv::Point font_right{ right,top };
+	if (font_left.y < 0) font_left.y = 1;
 
 	//绘制字体方框
 	cv::rectangle(picture_data, font_left, font_right, cv::Scalar(font_rgb[2], font_rgb[1], font_rgb[0]), thickness, 8, 0);
@@ -333,8 +319,6 @@ void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name
 
 	//绘制字体
 	cv::Point pos{ font_left.x, font_left.y + text_size.height };
-	if (pos.x + text_size.width > picture_data.cols) pos.x = picture_data.cols - text_size.width - 1;
-	if (pos.y + text_size.height > picture_data.rows) pos.y = picture_data.rows - text_size.height - 1;
 	cv::putText(picture_data, name, pos, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, cv::Scalar(255 - font_rgb[2], 255 - font_rgb[1], 255 - font_rgb[0]), 2 * font_size, cv::LINE_AA);
 }
 
@@ -519,7 +503,7 @@ unsigned __stdcall  analyse_video(void* prt)
 			before = after;
 			static char fps_char[default_char_size];
 			sprintf(fps_char, "fps is : %d", (int)fps);
-			cv::putText(video_ptr->original_frame, fps_char, cv::Point(50, 50), cv::FONT_HERSHEY_COMPLEX, 2, cv::Scalar(0, 0, 255));
+			cv::putText(video_ptr->original_frame, fps_char, cv::Point(50, 50), cv::FONT_HERSHEY_SIMPLEX, 2, cv::Scalar(0, 0, 255));
 
 			//显示结果
 			cv::imshow(control_ptr->video_path, video_ptr->original_frame);
@@ -606,6 +590,14 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 	//类型数量
 	int classes = g_global_set.net_set.classes;
 
+	//类型名称
+	char** names = g_global_set.net_set.classes_name;
+
+	//获取阈值信息
+	const float& thresh = g_global_set.video_detect_set.thresh;
+	const float& hier_thresh = g_global_set.video_detect_set.hier_thresh;
+	const float& nms = g_global_set.video_detect_set.nms;
+
 	//开始检测视频帧
 	while (video_info->detect_frame && video_info->read_frame && !video_info->break_state)
 	{
@@ -649,32 +641,28 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 
 			//获取方框数量
 			int box_count = 0;
-			detection* detection_data = get_network_boxes(&g_global_set.net_set.match_net, input_width, input_height, .25f, .45f, 0, 1, &box_count, 0);
+			detection* detection_data = get_network_boxes(&g_global_set.net_set.match_net, input_width, input_height, thresh, hier_thresh, 0, 1, &box_count, 0);
 
 			//进行非极大值抑制
-			do_nms_sort(detection_data, box_count, classes, .4f);
-
-			//获取大于阈值的方框
-			int useful_box = 0;
-			detection_with_class* class_data = get_actual_detections(detection_data, box_count, .45f, &useful_box, g_global_set.net_set.classes_name);
+			do_nms_sort(detection_data, box_count, classes, nms);
 
 			//操作每一个对象
-			for (int i = 0; i < useful_box; i++)
+			for (int i = 0; i < box_count; i++)
 			{
-				//对象
-				object_info object;
+				//查找
+				for (int j = 0; j < classes; j++)
+				{
+					if (detection_data[i].prob[j] > thresh)
+					{
+						//
+						char temp[1024];
+						sprintf(temp, "%s %d%%", names[j], (int)(detection_data[i].prob[j] * 100.0f));
 
-				//获取类别索引
-				object.class_index = class_data[i].best_class;
-
-				//获取置信度
-				object.confidence = class_data[i].det.prob[object.class_index] * 100.0f;
-
-				//获取方框位置
-				get_object_rect(video_ptr->original_frame.cols, video_ptr->original_frame.rows, class_data[i].det.bbox, object);
-
-				//绘制方框
-				draw_object_rect(video_ptr->original_frame, object.left, object.top, object.right, object.down);
+						//绘制方框
+						draw_boxs_and_classes(video_ptr->original_frame, detection_data[i].bbox, temp);
+						break;
+					}
+				}
 			}
 
 			//能进行显示通知
@@ -687,7 +675,6 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 
 			//释放内存
 			free_detections(detection_data, box_count);
-			free(class_data);
 		}
 
 		Sleep(*video_info->detect_delay);//暂停

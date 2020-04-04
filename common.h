@@ -48,15 +48,11 @@ struct color_info
 	//厚度
 	float thickness;
 
-	color_info() : thickness(3.0f)
-	{
-		box_rgb[0] = box_rgb[2] = box_rgb[1] = 100.0f;
-		font_rgb[0] = font_rgb[1] = font_rgb[2] = 200.0f;
-	}
+	color_info() : thickness(1.0f) {}
 };
 
-//分析图片相关
-struct picture_detect_info
+//分析相关
+struct set_detect_info
 {
 	double detect_time;//检测耗时
 
@@ -64,7 +60,7 @@ struct picture_detect_info
 	float hier_thresh;//阈值
 	float nms;//非极大值抑制
 
-	picture_detect_info() :thresh(0.25f), hier_thresh(0.5f), nms(0.45f) {}
+	set_detect_info() :thresh(0.25f), hier_thresh(0.5f), nms(0.45f) {}
 };
 
 //视频控制相关
@@ -199,7 +195,10 @@ struct global_set
 	struct net_info_set net_set;
 
 	//颜色相关
-	color_info color_set;
+	struct color_info color_set;
+
+	//视频检测相关
+	struct set_detect_info video_detect_set;
 };
 extern global_set g_global_set;
 
@@ -243,7 +242,7 @@ void read_picture_data(const char* target, image& picture_data, cv::Mat& opencv_
 void mat_translate_image(const cv::Mat& opencv_data, image& image_data);
 
 //预测图片
-void analyse_picture(const char* target, picture_detect_info& detect_info, bool show = false);
+void analyse_picture(const char* target, set_detect_info& detect_info, bool show = false);
 
 //绘制方框和类型
 void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name);
