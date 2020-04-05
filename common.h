@@ -23,6 +23,10 @@
 #include "image.h"
 #include "image_opencv.h"
 
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_win32.h"
+#include "imgui/imgui_impl_dx9.h"
+
 #include <opencv2/opencv.hpp>
 
 //默认字符串大小
@@ -167,6 +171,47 @@ struct imgui_set
 	//测试摄像头窗口
 	bool show_test_camera_window;
 
+	//设置马路区域
+	bool show_set_load_region_window;
+};
+
+//图片相关
+struct picture_info
+{
+	//宽度 高度 通道数
+	int w, h, c;
+
+	//图片数据
+	unsigned char* data;
+
+	picture_info() :w(0), h(0), c(0), data(nullptr) {}
+	void make(int _w, int _h, int _c)
+	{
+		clear();
+		w = _w;
+		h = _h;
+		c = _c;
+		data = new unsigned char[w * h * c];
+		assert(data);
+	}
+	void clear() 
+	{
+		if (data) delete[] data;
+		data = nullptr;
+		w = h = c = 0;
+	}
+};
+
+//标记相关
+struct region_mask
+{
+	//开始位置和结束位置
+	ImVec2 start_pos, stop_pos;
+
+	//方框颜色
+	ImVec4 rect_color;
+
+	region_mask(ImVec2 p1, ImVec2 p2, ImVec4 c) :start_pos(p1), stop_pos(p2), rect_color(c) {}
 };
 
 //全局设置信息
@@ -184,9 +229,11 @@ struct global_set
 	LPDIRECT3DDEVICE9 direct3ddevice9;
 	LPDIRECT3DTEXTURE9 direct3dtexture9;
 
-	//图像数据，用于在imgui中显示图片
-	int width, height, channel;
-	unsigned char* picture_data;
+	//图片设置
+	struct picture_info picture_set;
+
+	//视频帧设置
+	struct picture_info video_frame_set;
 
 	//界面显示相关
 	struct imgui_set imgui_show_set;
@@ -196,6 +243,9 @@ struct global_set
 
 	//颜色相关
 	struct color_info color_set;
+
+	//标记相关
+	std::vector<region_mask> mask_list;
 
 	//视频检测相关
 	struct set_detect_info video_detect_set;
@@ -258,6 +308,9 @@ std::string string_to_utf8(const char* str);
 
 //更新置图片纹理数据
 void update_picture_texture(cv::Mat& opencv_data);
+
+//读取一帧视频
+void read_video_frame(const char* target);
 
 //分析视频文件
 unsigned __stdcall analyse_video(void* prt);

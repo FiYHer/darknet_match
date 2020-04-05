@@ -400,32 +400,35 @@ void update_picture_texture(cv::Mat& opencv_data)
 {
 	//获取图片信息
 	int width = opencv_data.cols, height = opencv_data.rows, channel = opencv_data.channels();
-	g_global_set.width = width;
-	g_global_set.height = height;
-	g_global_set.channel = channel + 1;
-
-	//清空以前的图片数据
-	if (g_global_set.picture_data)
-	{
-		delete[] g_global_set.picture_data;
-		g_global_set.picture_data = nullptr;
-	}
-
-	//申请新的空间保存图片数据,为什么要通道加1？因为是RGBA格式
-	g_global_set.picture_data = new unsigned char[width * height * (channel + 1)];
-	check_serious_error(g_global_set.picture_data, "申请图片空间失败");
+	g_global_set.picture_set.make(width, height, channel + 1);
 
 	//图片格式转化
 	for (int i = 0; i < height; i++)
 	{
 		for (int j = 0; j < width; j++)
 		{
-			g_global_set.picture_data[(i * width + j) * (channel + 1) + 0] = opencv_data.data[(i * width + j) * channel + 0];
-			g_global_set.picture_data[(i * width + j) * (channel + 1) + 1] = opencv_data.data[(i * width + j) * channel + 1];
-			g_global_set.picture_data[(i * width + j) * (channel + 1) + 2] = opencv_data.data[(i * width + j) * channel + 2];
-			g_global_set.picture_data[(i * width + j) * (channel + 1) + 3] = 0xff;
+			g_global_set.picture_set.data[(i * width + j) * (channel + 1) + 0] = opencv_data.data[(i * width + j) * channel + 0];
+			g_global_set.picture_set.data[(i * width + j) * (channel + 1) + 1] = opencv_data.data[(i * width + j) * channel + 1];
+			g_global_set.picture_set.data[(i * width + j) * (channel + 1) + 2] = opencv_data.data[(i * width + j) * channel + 2];
+			g_global_set.picture_set.data[(i * width + j) * (channel + 1) + 3] = 0xff;
 		}
 	}
+}
+
+void read_video_frame(const char* target)
+{
+	cv::VideoCapture cap(target);
+	if (!cap.isOpened())
+	{
+		show_window_tip("视频文件打开失败");
+		return;
+	}
+
+	cv::Mat frame;
+	if (cap.read(frame)) update_picture_texture(frame);
+	else show_window_tip("视频帧读取失败");
+
+	cap.release();
 }
 
 unsigned __stdcall  analyse_video(void* prt)
@@ -740,7 +743,7 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 	//遍历每一张图片
 	for (int i = 0; i < picture_list.size(); i++)
 	{
-		if (i && i % 100 == 0) printf("完成数量 : %d \n", i);
+		if (i && i % 100 == 0) printf("图片数量 %d    完成数量 : %d \n", picture_list.size(), i);
 
 		//构建名称
 		std::string jpg_name = path;
@@ -820,4 +823,10 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 		free_image(sized);
 		free(selected_detections);
 	}
+
+	//释放类名
+	free_ptrs((void**)names, names_size);
+
+	//释放网络
+	free_network(net);
 }

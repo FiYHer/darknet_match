@@ -1,9 +1,5 @@
 #include "main.h"
 
-#include "imgui/imgui.h"
-#include "imgui/imgui_impl_win32.h"
-#include "imgui/imgui_impl_dx9.h"
-
 global_set g_global_set;
 
 //int main(int argc, char* argv[])
@@ -16,7 +12,6 @@ global_set g_global_set;
 //
 //	std::map<std::string, int> class_names;
 //	class_names.insert({ "car",1 });
-//	class_names.insert({ "bus",1 });
 //	class_names.insert({ "train" ,1 });
 //	class_names.insert({ "truck" ,1 });
 //	class_names.insert({ "person" ,2});
@@ -24,8 +19,14 @@ global_set g_global_set;
 //	class_names.insert({ "bicycle" ,4 });
 //	class_names.insert({ "traffic light",5 });
 //	class_names.insert({ "dog",6 });
+//	class_names.insert({ "bus",7 });
 //
-//	picture_to_label("H:\\CarPicture\\run_load2", class_names);
+//	std::vector<std::string> buffer
+//	{
+//		"H:\\CarPicture\\Lara3D_UrbanSeq1_JPG",
+//	};
+//	for(auto& it : buffer)
+//		picture_to_label(it.c_str(), class_names);
 //	printf("标记完成!------------------------------------------------------");
 //	getchar();
 //	return 0;
@@ -145,34 +146,32 @@ void window_message_handle()
 
 void picture_to_texture()
 {
-	//只在测试图片窗口显示
-	if (!g_global_set.imgui_show_set.show_test_picture_window) return;
-
 	//没有图片数据
-	if (!g_global_set.picture_data) return;
+	if (!g_global_set.picture_set.data) return;
 
 	//d3d9设备为空
 	if (!g_global_set.direct3ddevice9) return;
 
 	//获取宽度 高度 通道数
-	int width = g_global_set.width;
-	int height = g_global_set.height;
-	int channel = g_global_set.channel;
+	int width = g_global_set.picture_set.w;
+	int height = g_global_set.picture_set.h;
+	int channel = g_global_set.picture_set.c;
 
 	//创建图片纹理
 	HRESULT result = g_global_set.direct3ddevice9->CreateTexture(width, height, 1, D3DUSAGE_DYNAMIC, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &g_global_set.direct3dtexture9, NULL);
-	check_serious_error(result == S_OK, "加载图片数据到纹理失败");
-	D3DLOCKED_RECT lock_rect;
+	if (result == S_OK)
+	{
+		//锁定纹理内存
+		D3DLOCKED_RECT lock_rect;
+		g_global_set.direct3dtexture9->LockRect(0, &lock_rect, NULL, 0);
 
-	//锁定纹理内存
-	g_global_set.direct3dtexture9->LockRect(0, &lock_rect, NULL, 0);
+		//将图片数据拷贝到纹理内存中
+		for (int i = 0; i < height; i++)
+			memcpy((unsigned char *)lock_rect.pBits + lock_rect.Pitch * i, g_global_set.picture_set.data + (width * channel) * i, (width * channel));
 
-	//将图片数据拷贝到纹理内存中
-	for (int i = 0; i < g_global_set.height; i++) 
-		memcpy((unsigned char *)lock_rect.pBits + lock_rect.Pitch * i, g_global_set.picture_data + (width * channel) * i, (width * channel));
-	
-	//释放锁定内存
-	g_global_set.direct3dtexture9->UnlockRect(0);
+		//释放锁定内存
+		g_global_set.direct3dtexture9->UnlockRect(0);
+	}
 }
 
 void clear_picture_texture()
@@ -198,6 +197,7 @@ void imgui_show_handle()
 	imgui_test_picture_window();
 	imgui_test_video_window();
 	imgui_test_camera_window();
+	imgui_load_region_window();
 
 	//将渲染出来的界面绘制到窗口上相关代码
 	ImGui::EndFrame();
@@ -361,10 +361,19 @@ void imgui_test_video_window()
 		ImGui::InputInt(u8"检测延迟", &control_info.detect_delay);
 	}
 
+	if (ImGui::CollapsingHeader(u8"检测"))
+	{
+		ImGui::InputFloat(u8"thresh", &g_global_set.video_detect_set.thresh, 0.1f, 1.0f, "%.1f");
+		ImGui::InputFloat(u8"hier_thresh", &g_global_set.video_detect_set.hier_thresh, 0.1f, 1.0f, "%.1f");
+		ImGui::InputFloat(u8"nms", &g_global_set.video_detect_set.nms, 0.1f, 1.0f, "%.1f");
+	}
+
 	static char video_path[default_char_size] = "match.mp4";
 	ImGui::InputText(u8"视频路径", video_path, default_char_size);
 
 	if (ImGui::Button(u8"选择视频")) select_type_file("video file\0*.mp4;0*.avi\0\0", video_path);
+	ImGui::SameLine();
+	if (ImGui::Button(u8"标记区域")) g_global_set.imgui_show_set.show_set_load_region_window = true;
 	ImGui::SameLine();
 	if (ImGui::Button(u8"开始检测"))
 	{
@@ -387,6 +396,118 @@ void imgui_test_camera_window()
 	if (!g_global_set.imgui_show_set.show_test_camera_window) return;
 
 	ImGui::Begin(u8"智能交通系统  -  测试摄像头窗口", &g_global_set.imgui_show_set.show_test_camera_window);
+
+	ImGui::End();
+}
+
+void imgui_load_region_window()
+{
+	if (!g_global_set.imgui_show_set.show_set_load_region_window) return;
+
+	ImGui::SetNextWindowSize(ImVec2{ 600,600 }, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowPos(ImVec2{ 0,0 });
+	ImGui::Begin(u8"region set", &g_global_set.imgui_show_set.show_set_load_region_window, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoMove);
+
+	//获取绘制句柄
+	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+	//方框颜色
+	static ImVec4 colf = ImVec4(.0f, .0f, 0.4f, 1.0f);
+	const ImU32 col = ImColor(colf);
+
+	//控制相关
+	if (ImGui::BeginMenuBar())
+	{
+		static char video_path[default_char_size];
+		if (ImGui::BeginMenu(u8"读取一帧视频"))
+		{
+			if (ImGui::Button(u8"read") && select_type_file("video file\0*.mp4;0*.avi\0\0", video_path, default_char_size)) read_video_frame(video_path);
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"标记斑马线"))
+		{
+			if(ImGui::Button(u8"set"))
+				colf.w = colf.y = 1.0f; colf.x = colf.z = 0;
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"标记公交车专用道"))
+		{
+			if(ImGui::Button(u8"set"))
+				colf.w = colf.z = 1.0f; colf.y = colf.x = 0;
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"标记路边车位"))
+		{
+			if(ImGui::Button(u8"set"))
+				colf.w = colf.x = 1.0f; colf.y = colf.z = 0;
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"使用说明"))
+		{
+			ImGui::BulletText(u8"读取一帧视频");
+			ImGui::BulletText(u8"选择方框标记类型");
+			ImGui::BulletText(u8"单击鼠标左键设置开始位置");
+			ImGui::BulletText(u8"再次单击鼠标左键设置结束位置");
+			ImGui::BulletText(u8"单击鼠标右键删除上一个方框标记");
+			ImGui::EndMenu();
+		}
+		ImGui::EndMenuBar();
+	}
+
+	//获取位置
+	ImVec2 pos = ImGui::GetCursorScreenPos();
+	pos.x += 8.0f; pos.y += 60.0f;
+	ImVec2 size = ImGui::GetContentRegionAvail();
+
+	//先绘制图片
+	if (g_global_set.direct3dtexture9)
+		ImGui::Image(g_global_set.direct3dtexture9, size);
+
+	//获取当前鼠标在当前窗口的位置
+	ImVec2 current_pos = { ImGui::GetIO().MousePos.x - pos.x + 8,ImGui::GetIO().MousePos.y - pos.y + 60 };
+
+	//步骤
+	static int set_step = 0;
+
+	//开始位置
+	static ImVec2 start_pos{ -1,-1 };
+
+	//鼠标左键按下
+	if (ImGui::IsMouseClicked(0))
+	{
+		if (set_step == 0)//设置开始位置
+		{
+			start_pos = current_pos;
+			set_step++;
+		}
+		else if (set_step == 1)//保存进入列表
+		{
+			region_mask temp{ start_pos,current_pos,colf };
+			g_global_set.mask_list.push_back(std::move(temp));
+			start_pos = { -1,-1 };
+			set_step = 0;
+		}
+	}
+
+	//鼠标右键按下
+	if (ImGui::IsMouseClicked(1))
+	{
+		if (!set_step && g_global_set.mask_list.size()) g_global_set.mask_list.pop_back();
+		else
+		{
+			set_step = 0;
+			start_pos = { -1,-1 };
+		}
+	}
+
+	draw_list->PushClipRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), true);
+
+	//显示队列中的方框
+	for (auto& it : g_global_set.mask_list) draw_list->AddRect(it.start_pos, it.stop_pos, ImColor(it.rect_color), 0.0f, 0, 1.0f);
+
+	//绘制方框
+	if (start_pos.x != -1 && start_pos.y != -1) draw_list->AddRect(start_pos, current_pos, col, 0.0f, 0, 1.0f);
+	draw_list->PopClipRect();
 
 	ImGui::End();
 }

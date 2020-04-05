@@ -43,6 +43,9 @@ void imgui_test_video_window();
 //测试摄像头窗口
 void imgui_test_camera_window();
 
+//显示马路区域设置窗口
+void imgui_load_region_window();
+
 //重置d3d9设备
 void reset_d3d9_device();
 
