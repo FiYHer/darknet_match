@@ -70,8 +70,14 @@ struct set_detect_info
 //视频控制相关
 struct video_control
 {
+	//是否使用摄像头
+	int use_camera;
+
 	//视频路径
 	char video_path[default_char_size];
+
+	//摄像头索引
+	int camera_index;
 
 	//是否退出线程
 	bool leave;
@@ -82,8 +88,9 @@ struct video_control
 	//显示延迟 读取延迟 检测延迟
 	int show_delay, read_delay, detect_delay;
 
-	video_control() :leave(true), detect_count(4) 
+	video_control() :leave(true), detect_count(6) 
 	{
+		use_camera = camera_index = 0;
 		show_delay = read_delay = detect_delay = 10;
 	}
 };
@@ -202,6 +209,14 @@ struct picture_info
 	}
 };
 
+//区域类型
+enum region_type
+{
+	region_zebra_cross,//斑马线
+	region_bus_lane,//公交车专用道
+	region_street_parking//路边车位
+};
+
 //标记相关
 struct region_mask
 {
@@ -211,7 +226,11 @@ struct region_mask
 	//方框颜色
 	ImVec4 rect_color;
 
-	region_mask(ImVec2 p1, ImVec2 p2, ImVec4 c) :start_pos(p1), stop_pos(p2), rect_color(c) {}
+	//标记类型
+	enum region_type type;
+
+	region_mask() {}
+	region_mask(ImVec2 p1, ImVec2 p2, ImVec4 c, region_type t) :start_pos(p1), stop_pos(p2), rect_color(c), type(t) {}
 };
 
 //全局设置信息

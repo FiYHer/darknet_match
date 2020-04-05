@@ -439,7 +439,8 @@ unsigned __stdcall  analyse_video(void* prt)
 
 	//打开视频文件
 	video_handle_info video_info;
-	video_info.cap.open(control_ptr->video_path);
+	if (control_ptr->use_camera) video_info.cap.open(control_ptr->camera_index);
+	else video_info.cap.open(control_ptr->video_path);
 	if (!video_info.cap.isOpened())
 	{
 		show_window_tip("打开视频文件失败");
@@ -472,6 +473,7 @@ unsigned __stdcall  analyse_video(void* prt)
 		check_serious_error(detect_handle[i], "创建检测视频帧线程失败");
 	}
 
+	//计算fps相关
 	double fps = 0, before = 0;
 
 	//循环显示视频帧
@@ -518,6 +520,7 @@ unsigned __stdcall  analyse_video(void* prt)
 		//释放视频帧内存
 		if (video_ptr)
 		{
+			//视频帧数据
 			video_ptr->original_frame.release();
 			delete video_ptr;
 		}
@@ -644,25 +647,25 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 
 			//获取方框数量
 			int box_count = 0;
-			detection* detection_data = get_network_boxes(&g_global_set.net_set.match_net, input_width, input_height, thresh, hier_thresh, 0, 1, &box_count, 0);
+			detection* detect_data = get_network_boxes(&g_global_set.net_set.match_net, input_width, input_height, thresh, hier_thresh, 0, 1, &box_count, 0);
 
 			//进行非极大值抑制
-			do_nms_sort(detection_data, box_count, classes, nms);
+			do_nms_sort(detect_data, box_count, classes, nms);
 
-			//操作每一个对象
+			//操作
 			for (int i = 0; i < box_count; i++)
 			{
-				//查找
+				char temp[default_char_size];
+
+				//每一个类检测
 				for (int j = 0; j < classes; j++)
 				{
-					if (detection_data[i].prob[j] > thresh)
+					//大于阈值
+					if (detect_data[i].prob[j] > thresh)
 					{
-						//
-						char temp[1024];
-						sprintf(temp, "%s %d%%", names[j], (int)(detection_data[i].prob[j] * 100.0f));
-
-						//绘制方框
-						draw_boxs_and_classes(video_ptr->original_frame, detection_data[i].bbox, temp);
+						//绘制
+						sprintf(temp, "%s %d",names[j],(int)(detect_data[i].prob[j] * 100.0f));
+						draw_boxs_and_classes(video_ptr->original_frame, detect_data[i].bbox, temp);
 						break;
 					}
 				}
@@ -676,8 +679,8 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			picture_data.release();
 			rgb_data.release();
 
-			//释放内存
-			free_detections(detection_data, box_count);
+			//释放检测数据
+			free_detections(detect_data, box_count);
 		}
 
 		Sleep(*video_info->detect_delay);//暂停

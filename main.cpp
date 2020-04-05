@@ -366,23 +366,26 @@ void imgui_test_video_window()
 		ImGui::InputFloat(u8"thresh", &g_global_set.video_detect_set.thresh, 0.1f, 1.0f, "%.1f");
 		ImGui::InputFloat(u8"hier_thresh", &g_global_set.video_detect_set.hier_thresh, 0.1f, 1.0f, "%.1f");
 		ImGui::InputFloat(u8"nms", &g_global_set.video_detect_set.nms, 0.1f, 1.0f, "%.1f");
+		ImGui::InputInt(u8"检测线程", &control_info.detect_count);
 	}
 
-	static char video_path[default_char_size] = "match.mp4";
-	ImGui::InputText(u8"视频路径", video_path, default_char_size);
-
-	if (ImGui::Button(u8"选择视频")) select_type_file("video file\0*.mp4;0*.avi\0\0", video_path);
+	ImGui::RadioButton(u8"视频模式", &control_info.use_camera,0);
 	ImGui::SameLine();
+	ImGui::RadioButton(u8"摄像头模式", &control_info.use_camera,1);
+
+	if (control_info.use_camera) ImGui::InputInt(u8"摄像头索引", &control_info.camera_index);
+	else
+	{
+		ImGui::InputText(u8"视频路径", control_info.video_path, default_char_size);
+		if (ImGui::Button(u8"选择视频")) select_type_file("video file\0*.mp4;0*.avi\0\0", control_info.video_path);
+	}
+
 	if (ImGui::Button(u8"标记区域")) g_global_set.imgui_show_set.show_set_load_region_window = true;
 	ImGui::SameLine();
 	if (ImGui::Button(u8"开始检测"))
 	{
 		if (!control_info.leave) show_window_tip("请先停止上一个视频的检测");
-		else if (g_global_set.net_set.initizlie)
-		{
-			strncpy(control_info.video_path, video_path, default_char_size);
-			_beginthreadex(NULL, 0, analyse_video, &control_info, 0, NULL);
-		}
+		else if (g_global_set.net_set.initizlie) _beginthreadex(NULL, 0, analyse_video, &control_info, 0, NULL);
 		else show_window_tip("网络没有初始化");
 	}
 	ImGui::SameLine();
@@ -412,8 +415,11 @@ void imgui_load_region_window()
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
 	//方框颜色
-	static ImVec4 colf = ImVec4(.0f, .0f, 0.4f, 1.0f);
+	static ImVec4 colf = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
 	const ImU32 col = ImColor(colf);
+
+	//方框信息
+	region_mask region_info;
 
 	//控制相关
 	if (ImGui::BeginMenuBar())
@@ -426,20 +432,29 @@ void imgui_load_region_window()
 		}
 		if (ImGui::BeginMenu(u8"标记斑马线"))
 		{
-			if(ImGui::Button(u8"set"))
+			if (ImGui::Button(u8"set"))
+			{
 				colf.w = colf.y = 1.0f; colf.x = colf.z = 0;
+				region_info.type = region_zebra_cross;
+			}
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu(u8"标记公交车专用道"))
 		{
-			if(ImGui::Button(u8"set"))
+			if (ImGui::Button(u8"set"))
+			{
 				colf.w = colf.z = 1.0f; colf.y = colf.x = 0;
+				region_info.type = region_bus_lane;
+			}
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu(u8"标记路边车位"))
 		{
-			if(ImGui::Button(u8"set"))
+			if (ImGui::Button(u8"set"))
+			{
 				colf.w = colf.x = 1.0f; colf.y = colf.z = 0;
+				region_info.type = region_street_parking;
+			}
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu(u8"使用说明"))
@@ -455,16 +470,15 @@ void imgui_load_region_window()
 	}
 
 	//获取位置
-	ImVec2 pos = ImGui::GetCursorScreenPos();
-	pos.x += 8.0f; pos.y += 60.0f;
-	ImVec2 size = ImGui::GetContentRegionAvail();
+	const ImVec2 pos = ImGui::GetCursorScreenPos();
+	const ImVec2 size = ImGui::GetContentRegionAvail();
 
 	//先绘制图片
 	if (g_global_set.direct3dtexture9)
 		ImGui::Image(g_global_set.direct3dtexture9, size);
 
 	//获取当前鼠标在当前窗口的位置
-	ImVec2 current_pos = { ImGui::GetIO().MousePos.x - pos.x + 8,ImGui::GetIO().MousePos.y - pos.y + 60 };
+	ImVec2 current_pos = { ImGui::GetIO().MousePos.x - pos.x + 8,ImGui::GetIO().MousePos.y - pos.y + 60};
 
 	//步骤
 	static int set_step = 0;
@@ -482,10 +496,16 @@ void imgui_load_region_window()
 		}
 		else if (set_step == 1)//保存进入列表
 		{
-			region_mask temp{ start_pos,current_pos,colf };
-			g_global_set.mask_list.push_back(std::move(temp));
-			start_pos = { -1,-1 };
-			set_step = 0;
+			if (abs(current_pos.x - start_pos.x) < 30.0f && abs(current_pos.y - start_pos.y) < 30.0f) {}
+			else
+			{
+				region_info.start_pos = start_pos;
+				region_info.stop_pos = current_pos;
+				region_info.rect_color = colf;
+				g_global_set.mask_list.push_back(region_info);
+				start_pos = { -1,-1 };
+				set_step = 0;
+			}
 		}
 	}
 
