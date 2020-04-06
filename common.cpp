@@ -455,16 +455,26 @@ unsigned __stdcall  analyse_video(void* prt)
 	video_info.show_delay = &control_ptr->show_delay;
 	video_info.read_delay = &control_ptr->read_delay;
 	video_info.detect_delay = &control_ptr->detect_delay;
+	video_info.scene_delay = &control_ptr->scene_delay;
 
 	//创建线程
 	int detect_threas = control_ptr->detect_count;
-	HANDLE read_handle;
+	HANDLE read_handle, scene_handle;
 	HANDLE* detect_handle = new HANDLE[detect_threas];
-	check_serious_error(detect_handle, "申请线程句柄内存失败");
+	if (!detect_handle)
+	{
+		show_window_tip("申请线程句柄内存失败");
+		video_info.clear();
+		return 0;
+	}
 
 	//创建读取线程
 	read_handle = (HANDLE)_beginthreadex(NULL, 0, read_frame_proc, &video_info, 0, NULL);
 	check_serious_error(read_handle, "创建读取视频帧线程失败");
+
+	//创建场景线程
+	scene_handle = (HANDLE)_beginthreadex(NULL, 0, scene_event_proc, &video_info, 0, NULL);
+	check_serious_error(scene_handle, "创建场景检测线程失败");
 
 	//创建检测线程
 	for (int i = 0; i < detect_threas; i++)
@@ -473,8 +483,10 @@ unsigned __stdcall  analyse_video(void* prt)
 		check_serious_error(detect_handle[i], "创建检测视频帧线程失败");
 	}
 
-	//计算fps相关
-	double fps = 0, before = 0;
+	//计算fps
+	double &fps = g_global_set.fps[0];
+	double &before = g_global_set.fps[1];
+	char fps_char[default_char_size];
 
 	//循环显示视频帧
 	while (!control_ptr->leave && video_info.detect_frame)
@@ -506,9 +518,8 @@ unsigned __stdcall  analyse_video(void* prt)
 			double curr = 1000000. / (after - before);
 			fps = fps * 0.9 + curr * 0.1;
 			before = after;
-			static char fps_char[default_char_size];
 			sprintf(fps_char, "fps is : %d", (int)fps);
-			cv::putText(video_ptr->original_frame, fps_char, cv::Point(50, 50), cv::FONT_HERSHEY_SIMPLEX, 2, cv::Scalar(0, 0, 255));
+			cv::putText(video_ptr->original_frame, fps_char, cv::Point(10, 30), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(0, 0, 255), 1, 8);
 
 			//显示结果
 			cv::imshow(control_ptr->video_path, video_ptr->original_frame);
@@ -534,10 +545,14 @@ unsigned __stdcall  analyse_video(void* prt)
 	video_info.read_frame = false;
 	video_info.detect_frame = false;
 	WaitForSingleObject(read_handle, 1000 * 3);
+	WaitForSingleObject(scene_handle, 1000 * 3);
 	WaitForMultipleObjects(detect_threas, detect_handle, TRUE, 1000 * 3);
 
 	//释放相关内存
 	video_info.clear();
+
+	//释放线程句柄内存
+	delete[] detect_handle;
 
 	//设置退出标志
 	control_ptr->leave = true;
@@ -671,6 +686,9 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 				}
 			}
 
+			//放入列表让场景检测
+			video_info->scene_datas.push_back({ detect_data, box_count ,video_ptr->original_frame.cols,video_ptr->original_frame.rows});
+
 			//能进行显示通知
 			video_ptr->display = true;
 
@@ -678,9 +696,6 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			free_image(original_data);
 			picture_data.release();
 			rgb_data.release();
-
-			//释放检测数据
-			free_detections(detect_data, box_count);
 		}
 
 		Sleep(*video_info->detect_delay);//暂停
@@ -691,6 +706,154 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 	return 0;
 }
 
+unsigned __stdcall scene_event_proc(void* prt)
+{
+	//转化
+	video_handle_info* video_info = (video_handle_info*)prt;
+
+	//场景设置相关
+	bool &human_traffic = g_global_set.secne_set.human_traffic;
+	bool &car_traffic = g_global_set.secne_set.car_traffic;
+
+	//阈值
+	float &thresh = g_global_set.video_detect_set.thresh;
+
+	//获取类数量
+	int classes = g_global_set.net_set.classes;
+
+	int width, height;
+
+	//检测线程没退出才能工作，退出了的话我们也要跟着退出
+	while (video_info->detect_frame)
+	{
+		//bug:可能检测结果不是连续帧的!!!
+		int size = video_info->scene_datas.size();
+		for (int i = 0; i < size; i++)
+		{
+			std::vector<box> human;
+			std::vector<box> car;
+
+			//检测每一个方框
+			for (int j = 0; j < video_info->scene_datas[i].count; j++)
+			{
+				width = video_info->scene_datas[i].width;
+				height = video_info->scene_datas[i].height;
+
+				//判断是哪一个类
+				for (int p = 0; p < classes; p++)
+				{
+					//大于阈值
+					if (video_info->scene_datas[i].data[j].prob[p] > thresh)
+					{
+						/*每一个类型都不同处理
+						car_id,car,person,motorbike,bicycle,trafficlight,dog,bus
+						*/
+						box b = video_info->scene_datas[i].data[j].bbox;
+						switch (p)
+						{
+						case 1: //车
+							if (car_traffic) car.push_back(b);
+							break;
+						case 2: //人
+							if (human_traffic) human.push_back(b);
+							break;
+						}
+
+						break;
+					}
+				}
+			}
+
+			//统计人流量
+			if (human.size()) calc_human_traffic(human, width, height);
+
+			//统计车流量
+			if (car.size()) calc_car_traffic(car, width, height);
+		
+			//清空内存
+			video_info->scene_datas[i].clear();
+		}
+
+		//删除列表
+		video_info->scene_datas.erase(video_info->scene_datas.begin(), video_info->scene_datas.begin() + size);
+
+		Sleep(*video_info->detect_delay);//暂停
+	}
+
+	return 0;
+}
+
+void calc_human_traffic(std::vector<box>& b, int width, int height)
+{
+	static int last_tick = 0;
+	if (++last_tick < g_global_set.fps[0] * 2) return;
+	last_tick = 0;
+
+	//上一次有人的位置
+	static std::vector<box> last_pos;
+
+	//引用人流量
+	unsigned int &human_count = g_global_set.secne_set.human_count;
+
+	//每一个人
+	for (int i = 0; i < b.size(); i++)
+	{
+		//计算真实位置
+		calc_trust_box(b[i], width, height);
+
+		//判断是否同一人
+		if (!calc_same_rect(last_pos, b[i])) human_count++;
+	}
+
+	//
+	last_pos = std::move(b);
+}
+
+void calc_car_traffic(std::vector<box>& b, int width, int height)
+{
+
+
+
+
+}
+
+void calc_trust_box(box& b, int width, int height)
+{
+	int left = (b.x - b.w / 2.)*width;
+	int right = (b.x + b.w / 2.)*width;
+	int top = (b.y - b.h / 2.)*height;
+	int bot = (b.y + b.h / 2.)*height;
+
+	if (left < 0) left = 0;
+	if (right > width - 1) right = width - 1;
+	if (top < 0) top = 0;
+	if (bot > height - 1) bot = height - 1;
+
+	b.x = left;
+	b.y = top;
+	b.h = right;
+	b.w = bot;
+}
+
+bool calc_same_rect(std::vector<box>& b_list, box& b)
+{
+	auto func = [](box b1,box b2) -> bool
+	{
+		if (b1.x > b2.x)
+		{
+			box temp = b1;
+			b1 = b2;
+			b2 = temp;
+		}
+
+		if (b1.h <= b2.x) return false;
+		else if (b1.w <= b2.y) return false;
+		else return true;
+	};
+
+	for (int i = 0; i < b_list.size(); i++) if (func(b_list[i], b)) return true;
+	return false;
+}
 
 
 

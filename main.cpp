@@ -23,7 +23,7 @@ global_set g_global_set;
 //
 //	std::vector<std::string> buffer
 //	{
-//		"H:\\CarPicture\\Lara3D_UrbanSeq1_JPG",
+//		"H:\\CarPicture\\run_motorcycle",
 //	};
 //	for(auto& it : buffer)
 //		picture_to_label(it.c_str(), class_names);
@@ -93,7 +93,7 @@ void create_window()
 		WS_OVERLAPPEDWINDOW, 100, 100, 1000, 600, NULL, NULL, GetModuleHandleA(NULL), NULL);
 	check_serious_error(g_global_set.window_hwnd, "创建窗口失败");
 
-	ShowWindow(g_global_set.window_hwnd, SW_SHOW);
+	ShowWindow(g_global_set.window_hwnd, SW_SHOWMAXIMIZED);
 	UpdateWindow(g_global_set.window_hwnd);
 }
 
@@ -191,12 +191,11 @@ void imgui_show_handle()
 	ImGui::NewFrame();
 
 	//开始渲染一系列窗口
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 	imgui_show_manager();
 	imgui_file_set_window();
 	imgui_test_picture_window();
 	imgui_test_video_window();
-	imgui_test_camera_window();
 	imgui_load_region_window();
 
 	//将渲染出来的界面绘制到窗口上相关代码
@@ -222,7 +221,7 @@ void imgui_show_handle()
 
 void imgui_show_manager()
 {
-	ImGui::SetNextWindowSize(ImVec2(700, 300), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
 
 	ImGui::Begin(u8"智能交通系统");
 
@@ -251,12 +250,10 @@ void imgui_show_manager()
 
 	ImGui::Separator();
 	if (ImGui::Button(u8"文件配置窗口")) g_global_set.imgui_show_set.show_file_set_window = true;
-
+	ImGui::SameLine();
 	if (ImGui::Button(u8"测试图片系统窗口")) g_global_set.imgui_show_set.show_test_picture_window = true;
 	ImGui::SameLine();
 	if (ImGui::Button(u8"测试视频系统窗口")) g_global_set.imgui_show_set.show_test_video_window = true;
-	ImGui::SameLine();
-	if (ImGui::Button(u8"测试摄像头系统窗口")) g_global_set.imgui_show_set.show_test_camera_window = true;
 
 	ImGui::End();
 }
@@ -349,7 +346,7 @@ void imgui_test_video_window()
 {
 	if (!g_global_set.imgui_show_set.show_test_video_window) return;
 
-	ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(500, 700), ImGuiCond_FirstUseEver);
 	ImGui::Begin(u8"智能交通系统  -  测试视频窗口",&g_global_set.imgui_show_set.show_test_video_window);
 
 	//视频控制
@@ -359,14 +356,32 @@ void imgui_test_video_window()
 		ImGui::InputInt(u8"显示延迟", &control_info.show_delay);
 		ImGui::InputInt(u8"读取延迟", &control_info.read_delay);
 		ImGui::InputInt(u8"检测延迟", &control_info.detect_delay);
+		ImGui::InputInt(u8"场景延迟", &control_info.scene_delay);
 	}
 
 	if (ImGui::CollapsingHeader(u8"检测"))
 	{
-		ImGui::InputFloat(u8"thresh", &g_global_set.video_detect_set.thresh, 0.1f, 1.0f, "%.1f");
-		ImGui::InputFloat(u8"hier_thresh", &g_global_set.video_detect_set.hier_thresh, 0.1f, 1.0f, "%.1f");
-		ImGui::InputFloat(u8"nms", &g_global_set.video_detect_set.nms, 0.1f, 1.0f, "%.1f");
+		ImGui::InputFloat(u8"thresh", &g_global_set.video_detect_set.thresh, 0.1f, 1.0f, "%.2f");
+		ImGui::InputFloat(u8"hier_thresh", &g_global_set.video_detect_set.hier_thresh, 0.1f, 1.0f, "%.2f");
+		ImGui::InputFloat(u8"nms", &g_global_set.video_detect_set.nms, 0.1f, 1.0f, "%.2f");
 		ImGui::InputInt(u8"检测线程", &control_info.detect_count);
+	}
+
+	if (ImGui::CollapsingHeader(u8"场景"))
+	{
+		ImGui::Checkbox(u8"统计人流量",&g_global_set.secne_set.human_traffic);
+		ImGui::Checkbox(u8"统计车流量", &g_global_set.secne_set.car_traffic);
+		ImGui::Checkbox(u8"占用公交车道", &g_global_set.secne_set.occupy_bus_lane);
+		ImGui::Checkbox(u8"闯红灯", &g_global_set.secne_set.rush_red_light);
+		ImGui::Checkbox(u8"不按导向行驶", &g_global_set.secne_set.not_guided);
+		ImGui::Checkbox(u8"斑马线不礼让行人", &g_global_set.secne_set.not_zebra_cross);
+	}
+
+	if (ImGui::CollapsingHeader(u8"颜色"))
+	{
+		ImGui::ColorEdit3(u8"方框颜色", g_global_set.color_set.box_rgb);
+		ImGui::ColorEdit3(u8"字体颜色", g_global_set.color_set.font_rgb);
+		ImGui::InputFloat(u8"线条厚度", &g_global_set.color_set.thickness, 0.01f, 1.0f, "%.3f");
 	}
 
 	ImGui::RadioButton(u8"视频模式", &control_info.use_camera,0);
@@ -377,7 +392,7 @@ void imgui_test_video_window()
 	else
 	{
 		ImGui::InputText(u8"视频路径", control_info.video_path, default_char_size);
-		if (ImGui::Button(u8"选择视频")) select_type_file("video file\0*.mp4;0*.avi\0\0", control_info.video_path);
+		if (ImGui::Button(u8"选择视频")) select_type_file("video file\0*.mp4;*.avi;*.flv\0\0", control_info.video_path);
 	}
 
 	if (ImGui::Button(u8"标记区域")) g_global_set.imgui_show_set.show_set_load_region_window = true;
@@ -390,15 +405,25 @@ void imgui_test_video_window()
 	}
 	ImGui::SameLine();
 	if (ImGui::Button(u8"停止检测")) control_info.leave = true;
+	ImGui::Separator();
 
-	ImGui::End();
-}
+	if (g_global_set.secne_set.human_traffic)
+	{
+		ImGui::BulletText(u8"人流量 : %d ", g_global_set.secne_set.human_count);
+		ImGui::SameLine();
+		if (ImGui::Button(u8"重置")) g_global_set.secne_set.human_count = 0;
+	}
 
-void imgui_test_camera_window()
-{
-	if (!g_global_set.imgui_show_set.show_test_camera_window) return;
+	if (g_global_set.secne_set.car_traffic)
+	{
+		ImGui::BulletText(u8"车流量 : %d ", g_global_set.secne_set.car_count);
+		ImGui::SameLine();
+		if (ImGui::Button(u8"重置")) g_global_set.secne_set.car_count = 0;
+	}
 
-	ImGui::Begin(u8"智能交通系统  -  测试摄像头窗口", &g_global_set.imgui_show_set.show_test_camera_window);
+
+
+
 
 	ImGui::End();
 }
@@ -421,13 +446,23 @@ void imgui_load_region_window()
 	//方框信息
 	region_mask region_info;
 
+	//步骤
+	static int set_step = 0;
+
+	//开始位置
+	static ImVec2 start_pos{ -1,-1 };
+
 	//控制相关
 	if (ImGui::BeginMenuBar())
 	{
 		static char video_path[default_char_size];
 		if (ImGui::BeginMenu(u8"读取一帧视频"))
 		{
-			if (ImGui::Button(u8"read") && select_type_file("video file\0*.mp4;0*.avi\0\0", video_path, default_char_size)) read_video_frame(video_path);
+			if (ImGui::Button(u8"read") && select_type_file("video file\0*.mp4;0*.avi\0\0", video_path, default_char_size))
+			{
+				read_video_frame(video_path);
+				set_step = 0;
+			}
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu(u8"标记斑马线"))
@@ -436,6 +471,7 @@ void imgui_load_region_window()
 			{
 				colf.w = colf.y = 1.0f; colf.x = colf.z = 0;
 				region_info.type = region_zebra_cross;
+				set_step = 0;
 			}
 			ImGui::EndMenu();
 		}
@@ -445,6 +481,7 @@ void imgui_load_region_window()
 			{
 				colf.w = colf.z = 1.0f; colf.y = colf.x = 0;
 				region_info.type = region_bus_lane;
+				set_step = 0;
 			}
 			ImGui::EndMenu();
 		}
@@ -454,6 +491,7 @@ void imgui_load_region_window()
 			{
 				colf.w = colf.x = 1.0f; colf.y = colf.z = 0;
 				region_info.type = region_street_parking;
+				set_step = 0;
 			}
 			ImGui::EndMenu();
 		}
@@ -479,24 +517,24 @@ void imgui_load_region_window()
 
 	//获取当前鼠标在当前窗口的位置
 	ImVec2 current_pos = { ImGui::GetIO().MousePos.x - pos.x + 8,ImGui::GetIO().MousePos.y - pos.y + 60};
-
-	//步骤
-	static int set_step = 0;
-
-	//开始位置
-	static ImVec2 start_pos{ -1,-1 };
+	ImGui::Text(u8"%f %f", pos.x, pos.y);
+	ImGui::Text(u8"%f %f", size.x, size.y);
+	ImGui::Text(u8"%f %f", current_pos.x, current_pos.y - 50.0f);
 
 	//鼠标左键按下
 	if (ImGui::IsMouseClicked(0))
 	{
-		if (set_step == 0)//设置开始位置
+		//不在区域位置不画图
+		if (current_pos.x <= 0 || current_pos.y - 50.0f <= 0 || current_pos.x - 8 >= size.x || current_pos.y - 60 >= size.y) {}
+		else if (set_step == 0)//设置开始位置
 		{
 			start_pos = current_pos;
 			set_step++;
 		}
 		else if (set_step == 1)//保存进入列表
 		{
-			if (abs(current_pos.x - start_pos.x) < 30.0f && abs(current_pos.y - start_pos.y) < 30.0f) {}
+			//不能太小
+			if (abs(current_pos.x - start_pos.x) < 10.0f && abs(current_pos.y - start_pos.y) < 10.0f) {}
 			else
 			{
 				region_info.start_pos = start_pos;
@@ -520,14 +558,11 @@ void imgui_load_region_window()
 		}
 	}
 
-	draw_list->PushClipRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), true);
-
 	//显示队列中的方框
 	for (auto& it : g_global_set.mask_list) draw_list->AddRect(it.start_pos, it.stop_pos, ImColor(it.rect_color), 0.0f, 0, 1.0f);
 
 	//绘制方框
 	if (start_pos.x != -1 && start_pos.y != -1) draw_list->AddRect(start_pos, current_pos, col, 0.0f, 0, 1.0f);
-	draw_list->PopClipRect();
 
 	ImGui::End();
 }

@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <process.h>
 #include <stdio.h>
+#include <time.h>
 
 #include <d3d9.h>
 #include <corecrt_io.h>
@@ -55,6 +56,37 @@ struct color_info
 	color_info() : thickness(1.0f) {}
 };
 
+//场景相关
+struct scene_info
+{
+	//开始时间
+
+	//人流量
+	bool human_traffic;
+	unsigned int human_count;
+
+	//车流量
+	bool car_traffic;
+	unsigned int car_count;
+
+	//占用公交车道
+	bool occupy_bus_lane;
+
+	//闯红灯
+	bool rush_red_light;
+
+	//不按导向行驶
+	bool not_guided;
+
+	//斑马线不礼让行人
+	bool not_zebra_cross;
+
+	scene_info()
+	{
+		human_count = car_count = 0;
+	}
+};
+
 //分析相关
 struct set_detect_info
 {
@@ -85,13 +117,13 @@ struct video_control
 	//检测线程数量
 	int detect_count;
 
-	//显示延迟 读取延迟 检测延迟
-	int show_delay, read_delay, detect_delay;
+	//显示延迟 读取延迟 检测延迟 场景延迟
+	int show_delay, read_delay, detect_delay, scene_delay;
 
 	video_control() :leave(true), detect_count(6) 
 	{
 		use_camera = camera_index = 0;
-		show_delay = read_delay = detect_delay = 10;
+		show_delay = read_delay = detect_delay = scene_delay = 10;
 	}
 };
 
@@ -106,6 +138,23 @@ struct video_frame_info
 
 	//原始视频帧
 	cv::Mat original_frame;
+};
+
+//检测结果
+struct detect_result
+{
+	//检测结果
+	detection* data;
+
+	//数量
+	int count;
+
+	//宽度 高度
+	int width, height;
+
+	detect_result() :data(nullptr), count(0) {}
+	detect_result(detection* d, int c, int w, int h) :data(d), count(c), width(w), height(h) {}
+	void clear(){ if(data) free_detections(data, count);}
 };
 
 //视频处理相关
@@ -126,18 +175,21 @@ struct video_handle_info
 	//检测视频帧队列
 	std::vector<video_frame_info*> detect_datas;
 
+	//检测结果队列，用于场景检测
+	std::vector<detect_result> scene_datas;
+
 	//关键段用于线程同步
 	CRITICAL_SECTION critical_srction;
 
 	//各线程延迟设置
-	int *show_delay, *read_delay, *detect_delay;
+	int *show_delay, *read_delay, *detect_delay, *scene_delay;
 
 	void initialize()
 	{ 
 		break_state = false;
 		read_frame = detect_frame = true;
 		max_frame_count = 50;
-		show_delay = read_delay = detect_delay = nullptr;
+		show_delay = read_delay = detect_delay = scene_delay = nullptr;
 		InitializeCriticalSection(&critical_srction); 
 	}
 	void entry() { EnterCriticalSection(&critical_srction); }
@@ -174,9 +226,6 @@ struct imgui_set
 
 	//测试视频窗口
 	bool show_test_video_window;
-
-	//测试摄像头窗口
-	bool show_test_camera_window;
 
 	//设置马路区域
 	bool show_set_load_region_window;
@@ -248,6 +297,9 @@ struct global_set
 	LPDIRECT3DDEVICE9 direct3ddevice9;
 	LPDIRECT3DTEXTURE9 direct3dtexture9;
 
+	//计算fps
+	double fps[2];
+
 	//图片设置
 	struct picture_info picture_set;
 
@@ -265,6 +317,9 @@ struct global_set
 
 	//标记相关
 	std::vector<region_mask> mask_list;
+
+	//场景相关
+	scene_info secne_set;
 
 	//视频检测相关
 	struct set_detect_info video_detect_set;
@@ -340,10 +395,20 @@ unsigned __stdcall read_frame_proc(void* prt);
 //预测视频帧对象线程
 unsigned __stdcall prediction_frame_proc(void* prt);
 
+//场景事件处理
+unsigned __stdcall scene_event_proc(void* prt);
 
+//统计人流量
+void calc_human_traffic(std::vector<box>& b, int width, int height);
 
+//统计车流量
+void calc_car_traffic(std::vector<box>& b, int width, int height);
 
+//计算实际位置
+void calc_trust_box(box& b, int width, int height);
 
+//计算是否是同一个
+bool calc_same_rect(std::vector<box>& b_list,box& b);
 
 
 
