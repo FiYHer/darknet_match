@@ -33,17 +33,17 @@ global_set g_global_set;
 //}
 
 
-int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
-{
-	register_window_struct();
-	create_window();
-	initialize_d3d9();
-	initialize_imgui();
-	window_message_handle();
-	clear_imgui_set();
-	clear_d3d9_set();
-	return 0;
-}
+//int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+//{
+//	register_window_struct();
+//	create_window();
+//	initialize_d3d9();
+//	initialize_imgui();
+//	window_message_handle();
+//	clear_imgui_set();
+//	clear_d3d9_set();
+//	return 0;
+//}
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT _stdcall window_process(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)

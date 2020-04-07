@@ -785,6 +785,7 @@ unsigned __stdcall scene_event_proc(void* prt)
 
 void calc_human_traffic(std::vector<box>& b, int width, int height)
 {
+	//2秒检测一次
 	static int last_tick = 0;
 	if (++last_tick < g_global_set.fps[0] * 2) return;
 	last_tick = 0;
@@ -811,10 +812,28 @@ void calc_human_traffic(std::vector<box>& b, int width, int height)
 
 void calc_car_traffic(std::vector<box>& b, int width, int height)
 {
+	//两秒检测一次
+	static int last_tick = 0;
+	if (++last_tick < g_global_set.fps[0] * 2) return;
+	last_tick = 0;
 
+	//上次有车的位置
+	static std::vector<box> last_pos;
 
+	//引用车流量
+	unsigned int &car_count = g_global_set.secne_set.car_count;
 
+	//遍历每一辆车
+	for (int i = 0; i < b.size(); i++)
+	{
+		//计算真实位置
+		calc_trust_box(b[i], width, height);
 
+		if (!calc_same_rect(last_pos, b[i])) car_count++;
+	}
+
+	//保存
+	last_pos = std::move(b);
 }
 
 void calc_trust_box(box& b, int width, int height)

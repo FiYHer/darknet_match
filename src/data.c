@@ -1815,21 +1815,32 @@ data load_cifar10_data(char *filename)
     data d = {0};
     d.shallow = 0;
     long i,j;
-    matrix X = make_matrix(10000, 3072);
-    matrix y = make_matrix(10000, 10);
+    matrix X = make_matrix(10000, 3072);//10000张图片 每一张图片3072大小
+    matrix y = make_matrix(10000, 10);//10000个标签，每一个标签10个类别
     d.X = X;
     d.y = y;
 
     FILE *fp = fopen(filename, "rb");
     if(!fp) file_error(filename);
-    for(i = 0; i < 10000; ++i){
+
+    //10000张图片
+    for(i = 0; i < 10000; ++i)
+    {
+        //一张图片大小
         unsigned char bytes[3073];
+
+        //读取一张图片
         fread(bytes, 1, 3073, fp);
+
+        //每一张图片的第一位都是标签
         int class_id = bytes[0];
+
+        //标签置1
         y.vals[i][class_id] = 1;
-        for(j = 0; j < X.cols; ++j){
+
+        //
+        for(j = 0; j < X.cols; ++j)
             X.vals[i][j] = (double)bytes[j+1];
-        }
     }
     //translate_data_rows(d, -128);
     scale_data_rows(d, 1./255);
@@ -1875,32 +1886,44 @@ data load_all_cifar10()
     data d = {0};
     d.shallow = 0;
     int i,j,b;
-    matrix X = make_matrix(50000, 3072);
-    matrix y = make_matrix(50000, 10);
+    matrix X = make_matrix(50000, 3072);//图像数据 一行代表一张图片 r行 g行 b行
+    matrix y = make_matrix(50000, 10);//这个应该是标签 10类
     d.X = X;
     d.y = y;
 
 
-    for(b = 0; b < 5; ++b){
+    for(b = 0; b < 5; ++b)//cifar分为5个文件，每一个文件存放10000张
+    {
+        //读取cifar文件
         char buff[256];
         sprintf(buff, "data/cifar/cifar-10-batches-bin/data_batch_%d.bin", b+1);
         FILE *fp = fopen(buff, "rb");
         if(!fp) file_error(buff);
-        for(i = 0; i < 10000; ++i){
+
+        //每一张图片
+        for(i = 0; i < 10000; ++i)
+        {
+            //标签和一张图片的大小 <标签><图片数据>
             unsigned char bytes[3073];
+
+            //读取一张图片
             fread(bytes, 1, 3073, fp);
+
+            //获取标签id
             int class_id = bytes[0];
+
+            //设置置信度为1
             y.vals[i+b*10000][class_id] = 1;
-            for(j = 0; j < X.cols; ++j){
-                X.vals[i+b*10000][j] = (double)bytes[j+1];
-            }
+
+            //图片像素复制
+            for(j = 0; j < X.cols; ++j)
+                X.vals[i+b*10000][j] = (double)bytes[j+1];//(double)bytes[j+1]我不理解
         }
-        fclose(fp);
+        fclose(fp);//关闭文件
     }
-    //normalize_data_rows(d);
-    //translate_data_rows(d, -128);
-    scale_data_rows(d, 1./255);
-    smooth_data(d);
+
+    scale_data_rows(d, 1./255);//均值化
+    smooth_data(d);//平滑化
     return d;
 }
 

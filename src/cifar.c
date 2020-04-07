@@ -6,46 +6,76 @@
 
 void train_cifar(char *cfgfile, char *weightfile)
 {
+    //初始化随机种子
     srand(time(0));
+
+    //平均损失
     float avg_loss = -1;
+
+    //
     char *base = basecfg(cfgfile);
     printf("%s\n", base);
+
+    //加载网络
     network net = parse_network_cfg(cfgfile);
-    if(weightfile){
-        load_weights(&net, weightfile);
-    }
+
+    //加载权重
+    if(weightfile) load_weights(&net, weightfile);
+  
     printf("Learning Rate: %g, Momentum: %g, Decay: %g\n", net.learning_rate, net.momentum, net.decay);
 
-    char* backup_directory = "backup/";
-    int classes = 10;
+    char* backup_directory = "backup/";//权重保存目录
+    int classes = 10;//类别69
     int N = 50000;
 
+    //获取标签类别
     char **labels = get_labels("data/cifar/labels.txt");
-    int epoch = (*net.seen)/N;
+
+    int epoch = (*net.seen)/N;//
+
+    //加载训练数据
     data train = load_all_cifar10();
-    while(get_current_batch(net) < net.max_batches || net.max_batches == 0){
+
+    //开始迭代训练
+    while(get_current_batch(net) < net.max_batches || net.max_batches == 0)
+    {
+        //获取开始时间
         clock_t time=clock();
 
+        //训练获取损失
         float loss = train_network_sgd(net, train, 1);
+
+        //计算平均损失
         if(avg_loss == -1) avg_loss = loss;
         avg_loss = avg_loss*.95 + loss*.05;
+
+        //
         printf("%d, %.3f: %f, %f avg, %f rate, %lf seconds, %ld images\n", get_current_batch(net), (float)(*net.seen)/N, loss, avg_loss, get_current_rate(net), sec(clock()-time), *net.seen);
-        if(*net.seen/N > epoch){
+
+        //
+        if(*net.seen/N > epoch)
+        {
             epoch = *net.seen/N;
             char buff[256];
             sprintf(buff, "%s/%s_%d.weights",backup_directory,base, epoch);
             save_weights(net, buff);
         }
-        if(get_current_batch(net)%100 == 0){
+
+        //每100迭代保存一次权重
+        if(get_current_batch(net)%100 == 0)
+        {
             char buff[256];
             sprintf(buff, "%s/%s.backup",backup_directory,base);
             save_weights(net, buff);
         }
     }
+
+    //保存最后的权重
     char buff[256];
     sprintf(buff, "%s/%s.weights", backup_directory, base);
     save_weights(net, buff);
 
+    //释放信息
     free_network(net);
     free_ptrs((void**)labels, classes);
     free(base);
