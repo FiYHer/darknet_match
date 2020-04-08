@@ -56,6 +56,14 @@ struct color_info
 	color_info() : thickness(1.0f) {}
 };
 
+//车辆信息
+struct car_info
+{
+	int car_id[7];//车辆车牌索引
+
+	int times[6];//时间信息
+};
+
 //场景相关
 struct scene_info
 {
@@ -63,14 +71,19 @@ struct scene_info
 
 	//人流量
 	bool human_traffic;
-	unsigned int human_count;
+	unsigned int human_count;//总人流量
+	unsigned int human_current;//当前人流量
+	unsigned int human_avg;//平均人流量
 
 	//车流量
 	bool car_traffic;
-	unsigned int car_count;
+	unsigned int car_count;//总车流量
+	unsigned int car_current;//当前车流量
+	unsigned int car_avg;//平均车流量
 
 	//占用公交车道
 	bool occupy_bus_lane;
+	std::vector<car_info> occupy_bus_list;//车辆列表
 
 	//闯红灯
 	bool rush_red_light;
@@ -269,8 +282,11 @@ enum region_type
 //标记相关
 struct region_mask
 {
+	//窗口大小
+	ImVec2 window_size;
+
 	//开始位置和结束位置
-	ImVec2 start_pos, stop_pos;
+	ImVec2 pos, size;
 
 	//方框颜色
 	ImVec4 rect_color;
@@ -279,7 +295,31 @@ struct region_mask
 	enum region_type type;
 
 	region_mask() {}
-	region_mask(ImVec2 p1, ImVec2 p2, ImVec4 c, region_type t) :start_pos(p1), stop_pos(p2), rect_color(c), type(t) {}
+	region_mask(ImVec2 p1, ImVec2 p2, ImVec4 c, region_type t) :pos(p1), size(p2), rect_color(c), type(t) {}
+	
+	//转化为相对位置
+	box to_box()
+	{
+		float w_scale = 1.0f / window_size.x;
+		float h_scale = 1.0f / window_size.y;
+
+		float x_center = (pos.x + size.x) / 2.0f - 1.0f;
+		float y_center = (pos.y - 50.0f + size.y - 50.0f) / 2.0f - 1.0f;
+		float width_scale = abs(pos.x - size.x);
+		float height_scale = abs(pos.y - 50.0f - size.y - 50.0f);
+
+		x_center *= w_scale;
+		y_center *= h_scale;
+		width_scale *= w_scale;
+		height_scale *= h_scale;
+
+		box this_box;
+		this_box.x = x_center;
+		this_box.y = y_center;
+		this_box.w = width_scale;
+		this_box.h = height_scale;
+		return this_box;
+	}
 };
 
 //全局设置信息
@@ -315,7 +355,7 @@ struct global_set
 	//颜色相关
 	struct color_info color_set;
 
-	//标记相关
+	//区域标记相关
 	std::vector<region_mask> mask_list;
 
 	//场景相关
@@ -399,16 +439,26 @@ unsigned __stdcall prediction_frame_proc(void* prt);
 unsigned __stdcall scene_event_proc(void* prt);
 
 //统计人流量
-void calc_human_traffic(std::vector<box>& b, int width, int height);
+void calc_human_traffic(std::vector<box> b, int width, int height);
 
 //统计车流量
-void calc_car_traffic(std::vector<box>& b, int width, int height);
+void calc_car_traffic(std::vector<box> b, int width, int height);
 
 //计算实际位置
 void calc_trust_box(box& b, int width, int height);
 
+//计算相交
+bool calc_intersect(box& b1, box& b2);
+
 //计算是否是同一个
 bool calc_same_rect(std::vector<box>& b_list,box& b);
+
+//占用公交车道检测
+void check_occupy_bus_lane(std::vector<box> b, int width, int height);
+
+
+
+
 
 
 

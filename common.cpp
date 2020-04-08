@@ -293,7 +293,7 @@ void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name
 	if (bot > picture_data.rows - 1) bot = picture_data.rows - 1;
 
 	//计算字体大小
-	float font_size = picture_data.rows / 1500.0f;
+	float font_size = picture_data.rows / 1200.0f;
 	cv::Size text_size = cv::getTextSize(name, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, 1, 0);
 
 	//方框颜色
@@ -514,12 +514,28 @@ unsigned __stdcall  analyse_video(void* prt)
 		//如果有结果了
 		if (video_ptr)
 		{
-			double after = get_time_point();    // more accurate time measurements
+			//计算fps
+			double after = get_time_point();
 			double curr = 1000000. / (after - before);
 			fps = fps * 0.9 + curr * 0.1;
 			before = after;
 			sprintf(fps_char, "fps is : %d", (int)fps);
 			cv::putText(video_ptr->original_frame, fps_char, cv::Point(10, 30), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(0, 0, 255), 1, 8);
+
+			//绘制区域
+			std::vector<region_mask> region(g_global_set.mask_list.size());
+			std::copy(g_global_set.mask_list.begin(), g_global_set.mask_list.end(), region.begin());
+			for (auto it : region)
+			{
+				//获取方框
+				box this_box = it.to_box();
+
+				//转化为真实位置
+				calc_trust_box(this_box, video_ptr->original_frame.cols, video_ptr->original_frame.rows);
+
+				//绘制人物方框
+				cv::rectangle(video_ptr->original_frame, cv::Point(this_box.x, this_box.y), cv::Point(this_box.w, this_box.h), cv::Scalar(it.rect_color.x * 255, it.rect_color.y * 255, it.rect_color.y * 255), 1, 8, 0);
+			}
 
 			//显示结果
 			cv::imshow(control_ptr->video_path, video_ptr->original_frame);
@@ -714,6 +730,7 @@ unsigned __stdcall scene_event_proc(void* prt)
 	//场景设置相关
 	bool &human_traffic = g_global_set.secne_set.human_traffic;
 	bool &car_traffic = g_global_set.secne_set.car_traffic;
+	bool &occupy_bus_lane = g_global_set.secne_set.occupy_bus_lane;
 
 	//阈值
 	float &thresh = g_global_set.video_detect_set.thresh;
@@ -752,7 +769,7 @@ unsigned __stdcall scene_event_proc(void* prt)
 						switch (p)
 						{
 						case 1: //车
-							if (car_traffic) car.push_back(b);
+							if (car_traffic || occupy_bus_lane) car.push_back(b);
 							break;
 						case 2: //人
 							if (human_traffic) human.push_back(b);
@@ -765,11 +782,14 @@ unsigned __stdcall scene_event_proc(void* prt)
 			}
 
 			//统计人流量
-			if (human.size()) calc_human_traffic(human, width, height);
+			if (human_traffic) calc_human_traffic(human, width, height);
 
 			//统计车流量
-			if (car.size()) calc_car_traffic(car, width, height);
+			if (car_traffic) calc_car_traffic(car, width, height);
 		
+			//占用公交车道
+			if (occupy_bus_lane) check_occupy_bus_lane(car, width, height);
+
 			//清空内存
 			video_info->scene_datas[i].clear();
 		}
@@ -783,56 +803,89 @@ unsigned __stdcall scene_event_proc(void* prt)
 	return 0;
 }
 
-void calc_human_traffic(std::vector<box>& b, int width, int height)
+void calc_human_traffic(std::vector<box> b, int width, int height)
 {
-	//2秒检测一次
+	//1秒检测一次
 	static int last_tick = 0;
-	if (++last_tick < g_global_set.fps[0] * 2) return;
+	if (++last_tick < g_global_set.fps[0]) return;
 	last_tick = 0;
+
+	//引用人流量
+	unsigned int &human_count = g_global_set.secne_set.human_count;
+	unsigned int &human_current = g_global_set.secne_set.human_current;
+
+	//设置当前人流量
+	human_current = b.size();
 
 	//上一次有人的位置
 	static std::vector<box> last_pos;
 
-	//引用人流量
-	unsigned int &human_count = g_global_set.secne_set.human_count;
-
-	//每一个人
-	for (int i = 0; i < b.size(); i++)
+	//当前为空
+	if (b.empty())
 	{
-		//计算真实位置
-		calc_trust_box(b[i], width, height);
-
-		//判断是否同一人
-		if (!calc_same_rect(last_pos, b[i])) human_count++;
+		last_pos.clear();
+		human_current = 0;
+		return;
 	}
 
-	//
+	//将位置信息全部转化为真实位置
+	for (auto& it : b) calc_trust_box(it, width, height);
+
+	//上一次为空，就直接赋值
+	if (last_pos.empty())
+	{
+		human_count += b.size();
+		last_pos = std::move(b);
+		return;
+	}
+
+	//每一个人
+	for (auto& it : b) if (!calc_same_rect(last_pos, it)) human_count++;
+
+	//保存位置
 	last_pos = std::move(b);
 }
 
-void calc_car_traffic(std::vector<box>& b, int width, int height)
+void calc_car_traffic(std::vector<box> b, int width, int height)
 {
-	//两秒检测一次
+	//1秒检测一次
 	static int last_tick = 0;
-	if (++last_tick < g_global_set.fps[0] * 2) return;
+	if (++last_tick < g_global_set.fps[0]) return;
 	last_tick = 0;
+
+	//引用车流量
+	unsigned int &car_count = g_global_set.secne_set.car_count;
+	unsigned int &car_current = g_global_set.secne_set.car_current;
+
+	//设置当前车流量
+	car_current = b.size();
 
 	//上次有车的位置
 	static std::vector<box> last_pos;
 
-	//引用车流量
-	unsigned int &car_count = g_global_set.secne_set.car_count;
-
-	//遍历每一辆车
-	for (int i = 0; i < b.size(); i++)
+	//当前为空
+	if (b.empty())
 	{
-		//计算真实位置
-		calc_trust_box(b[i], width, height);
-
-		if (!calc_same_rect(last_pos, b[i])) car_count++;
+		last_pos.clear();
+		car_current = 0;
+		return;
 	}
 
-	//保存
+	//全部转化为真实位置
+	for (auto& it : b) calc_trust_box(it, width, height);
+
+	//如果上一次为空
+	if (last_pos.empty())
+	{
+		car_current = b.size();
+		last_pos = std::move(b);
+		return;
+	}
+
+	//遍历每一辆车
+	for (auto& it : b) if (!calc_same_rect(last_pos, it)) car_count++;
+
+	//保存位置
 	last_pos = std::move(b);
 }
 
@@ -850,32 +903,91 @@ void calc_trust_box(box& b, int width, int height)
 
 	b.x = left;
 	b.y = top;
-	b.h = right;
-	b.w = bot;
+	b.h = bot;
+	b.w = right;
+}
+
+bool calc_intersect(box& b1, box& b2)
+{
+	//小在左 大在右
+	if (b1.x > b2.x)
+	{
+		box temp = b1;
+		b1 = b2;
+		b2 = temp;
+	}
+
+	//宽高是否相交
+	if (b1.w < b2.x) return false;
+	else if (b1.h < b2.y) return false;
+	else return true;
 }
 
 bool calc_same_rect(std::vector<box>& b_list, box& b)
 {
-	auto func = [](box b1,box b2) -> bool
-	{
-		if (b1.x > b2.x)
-		{
-			box temp = b1;
-			b1 = b2;
-			b2 = temp;
-		}
-
-		if (b1.h <= b2.x) return false;
-		else if (b1.w <= b2.y) return false;
-		else return true;
-	};
-
-	for (int i = 0; i < b_list.size(); i++) if (func(b_list[i], b)) return true;
+	for (int i = 0; i < b_list.size(); i++) if (calc_intersect(b_list[i], b)) return true;
 	return false;
 }
 
+void check_occupy_bus_lane(std::vector<box> b, int width, int height)
+{
+	//1秒检测一次
+	static int last_tick = 0;
+	if (++last_tick < g_global_set.fps[0]) return;
+	last_tick = 0;
 
+	//上一次的车辆位置
+	static std::vector<box> last_pos;
 
+	//当前为空
+	if (b.empty())
+	{
+		last_pos.clear();
+		return;
+	}
+
+	//全部转化为真实位置
+	for (auto& it : b) calc_trust_box(it, width, height);
+
+	//遍历每一个区域
+	for (auto& it : g_global_set.mask_list)
+	{
+		//如果是公交车道区域
+		if (it.type == region_bus_lane)
+		{
+			//公交车道真实位置
+			box region_box = it.to_box();
+			calc_trust_box(region_box, width, height);
+
+			//车辆与公交车道是否相交
+			for (auto& ls : b)
+			{
+				//与公交车道相交 且 上一次这个位置没用车辆
+				if (calc_intersect(ls, region_box) && !calc_same_rect(last_pos, ls))
+				{
+					car_info info;
+					//车牌检测
+					//........
+
+					//获取当前时间
+					time_t timep;
+					time(&timep);
+					struct tm *prt = gmtime(&timep);
+					info.times[0] = prt->tm_year + 1900;//年
+					info.times[1] = prt->tm_mon + 1;//月
+					info.times[2] = prt->tm_mday;//日
+					info.times[3] = prt->tm_hour + 8;//时
+					info.times[4] = prt->tm_min;//分
+					info.times[5] = prt->tm_sec;//秒
+					g_global_set.secne_set.occupy_bus_list.push_back(std::move(info));
+				}
+			}
+		}
+	}
+
+	//保存这一次的位置
+	last_pos = std::move(b);
+}
 
 
 

@@ -1838,7 +1838,7 @@ data load_cifar10_data(char *filename)
         //标签置1
         y.vals[i][class_id] = 1;
 
-        //
+        //(double)bytes[j+1];的加一是为了跳过第一位，也就是标签位
         for(j = 0; j < X.cols; ++j)
             X.vals[i][j] = (double)bytes[j+1];
     }

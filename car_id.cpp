@@ -9,6 +9,8 @@
 #include <string>
 #include <fstream>
 
+#include <opencv2/opencv.hpp>
+
 //读取车牌数据
 data read_car_id_data(const char* images_path, int image_size, int classes);
 
@@ -102,7 +104,7 @@ data read_car_id_data(const char* images_path, int image_size, int classes)
 	std::vector<std::string> all_file;
 
 	//保存全部图片标签
-	std::vector<std::string> all_label;
+	std::vector<int> all_label;
 
 	//打开文件
 	std::fstream file(images_path, std::fstream::in);
@@ -113,29 +115,46 @@ data read_car_id_data(const char* images_path, int image_size, int classes)
 		exit(-1);
 	}
 
-	//读取全部图片路径
+	//读取全部图片路径和标签
 	std::string line_data;
 	while (getline(file, line_data))
 	{
-		char name[1024], label[1024];
-		//sprintf(name,label)
-		all_file.push_back(std::move(line_data));
+		char this_name[1024];
+		int this_label;
+		sscanf(line_data.c_str(), "%s - %d", this_name, &this_label);
+		all_file.push_back(std::move(this_name));
+		all_label.push_back(std::move(this_label));
 	}
 	file.close();
 
 	//创建空间
 	data result_data;
 	result_data.shallow = 0;
-	matrix x = make_matrix(all_file.size(), image_size);
+	matrix X = make_matrix(all_file.size(), image_size);
 	matrix y = make_matrix(all_file.size(), classes);
-	result_data.X = x;
+	result_data.X = X;
 	result_data.y = y;
 
 	//读取每一张图片
 	for (int i = 0; i < all_file.size(); i++)
 	{
+		//读取图片数据
+		cv::Mat src = cv::imread(all_file[i]);
+		if(src.empty()) continue;
+		unsigned char* this_data = (unsigned char*)src.data;
 
+		//设置标签
+		y.vals[i][all_label[i]] = 1;
+
+		//设置图片数据
+		for (int j = 0; j < X.cols; j++) X.vals[i][j] = (double)this_data[j];
 	}
+
+	//全部归一化
+	scale_data_rows(result_data, 1.0f / 255.0f);
+
+	//返回
+	return result_data;
 }
 
 
