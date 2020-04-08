@@ -303,10 +303,15 @@ struct region_mask
 		float w_scale = 1.0f / window_size.x;
 		float h_scale = 1.0f / window_size.y;
 
-		float x_center = (pos.x + size.x) / 2.0f - 1.0f;
-		float y_center = (pos.y - 50.0f + size.y - 50.0f) / 2.0f - 1.0f;
-		float width_scale = abs(pos.x - size.x);
-		float height_scale = abs(pos.y - 50.0f - size.y - 50.0f);
+		float p_x = pos.x - 8.0f;
+		float p_y = pos.y - 50.0f;
+		float s_x = size.x - 8.0f;
+		float s_y = size.y - 50.0f;
+
+		float x_center = (p_x+ s_x) / 2.0f - 1.0f;
+		float y_center = (p_y + s_y) / 2.0f - 1.0f;
+		float width_scale = abs(p_x - s_x);
+		float height_scale = abs(p_y - s_y);
 
 		x_center *= w_scale;
 		y_center *= h_scale;

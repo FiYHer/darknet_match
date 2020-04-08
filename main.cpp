@@ -555,29 +555,19 @@ void imgui_load_region_window()
 		ImGui::EndMenuBar();
 	}
 
-	//获取位置
-	const ImVec2 pos = ImGui::GetCursorScreenPos();
-	const ImVec2 size = ImGui::GetContentRegionAvail();
-
 	//先绘制图片
 	if (g_global_set.direct3dtexture9)
-		ImGui::Image(g_global_set.direct3dtexture9, size);
+		ImGui::Image(g_global_set.direct3dtexture9, ImGui::GetContentRegionAvail());
 
-	//获取当前鼠标在当前窗口的位置
-	ImVec2 current_pos = { ImGui::GetIO().MousePos.x - pos.x + 8,ImGui::GetIO().MousePos.y - pos.y + 60};
-	//ImGui::Text(u8"区域X轴 %f   区域Y轴 %f", pos.x, pos.y);
-	//ImGui::Text(u8"区域宽度 %f  区域高度 %f", size.x, size.y);
-	ImGui::Text(u8"窗口宽度 %f  窗口高度 %f", ImGui::GetWindowWidth(), ImGui::GetWindowHeight());
-	ImGui::Text(u8"窗口X轴  %f  窗口Y轴  %f", ImGui::GetWindowPos().x, ImGui::GetWindowPos().y);
-	ImGui::Text(u8"鼠标X轴  %f  鼠标Y轴  %f", ImGui::GetIO().MousePos.x, ImGui::GetIO().MousePos.y);
-	//ImGui::Text(u8"%f %f", current_pos.x, current_pos.y - 50.0f);//这里才是原点啊 (0,0)
+	//获取位置
+	const ImVec2 window_size = { ImGui::GetWindowWidth(),ImGui::GetWindowHeight() };
+	const ImVec2 current_pos = { ImGui::GetIO().MousePos.x,ImGui::GetIO().MousePos.y };
 	
-
 	//鼠标左键按下
 	if (ImGui::IsMouseClicked(0))
 	{
 		//不在区域位置不画图
-		if (current_pos.x <= 0 || current_pos.y - 50.0f <= 0 || current_pos.x - 8 >= size.x || current_pos.y - 60 >= size.y) {}
+		if (current_pos.x <= 0 || current_pos.y - 50.0f <= 0 || current_pos.x >= window_size.x || current_pos.y >= window_size.y) {}
 		else if (set_step == 0)//设置开始位置
 		{
 			start_pos = current_pos;
@@ -589,7 +579,7 @@ void imgui_load_region_window()
 			if (abs(current_pos.x - start_pos.x) < 10.0f && abs(current_pos.y - start_pos.y) < 10.0f) {}
 			else
 			{
-				region_info.window_size = size;
+				region_info.window_size = { window_size.x,window_size.y - 50.0f };
 				region_info.pos = start_pos;
 				region_info.size = current_pos;
 				region_info.rect_color = colf;
