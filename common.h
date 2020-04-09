@@ -453,7 +453,7 @@ void calc_car_traffic(std::vector<box> b, int width, int height);
 void calc_trust_box(box& b, int width, int height);
 
 //计算相交
-bool calc_intersect(box& b1, box& b2);
+bool calc_intersect(box b1, box b2, float ratio = 0.5f);
 
 //计算是否是同一个
 bool calc_same_rect(std::vector<box>& b_list,box& b);

@@ -534,7 +534,7 @@ unsigned __stdcall  analyse_video(void* prt)
 				calc_trust_box(this_box, video_ptr->original_frame.cols, video_ptr->original_frame.rows);
 
 				//绘制人物方框
-				cv::rectangle(video_ptr->original_frame, cv::Point(this_box.x, this_box.y), cv::Point(this_box.w, this_box.h), cv::Scalar(it.rect_color.x * 255, it.rect_color.y * 255, it.rect_color.y * 255), 1, 8, 0);
+				cv::rectangle(video_ptr->original_frame, cv::Point(this_box.x, this_box.y), cv::Point(this_box.w, this_box.h), cv::Scalar(it.rect_color.w * 255, it.rect_color.y * 255, it.rect_color.x * 255), 1, 8, 0);
 			}
 
 			//显示结果
@@ -907,7 +907,7 @@ void calc_trust_box(box& b, int width, int height)
 	b.w = right;
 }
 
-bool calc_intersect(box& b1, box& b2)
+bool calc_intersect(box b1, box b2, float ratio)
 {
 	//小在左 大在右
 	if (b1.x > b2.x)
@@ -917,10 +917,19 @@ bool calc_intersect(box& b1, box& b2)
 		b2 = temp;
 	}
 
-	//宽高是否相交
-	if (b1.w < b2.x) return false;
-	else if (b1.h < b2.y) return false;
-	else return true;
+	//一点不相交
+	if (b1.x + b1.w < b2.x) return false;
+	else if (b1.y + b1.h < b2.y) return false;
+
+	//计算相交率
+	float width = b1.x + b1.w - b2.x;
+	float height = b1.y + b1.h - b2.y;
+	float b1_w_area = width / b1.w;
+	float b1_h_area = height / b1.h;
+	float b2_w_area = width / b2.w;
+	float b2_h_area = height / b2.h;
+	if (b1_w_area >= ratio || b1_h_area >= ratio || b2_w_area >= ratio || b2_h_area >= ratio) return true;
+	else return false;
 }
 
 bool calc_same_rect(std::vector<box>& b_list, box& b)
@@ -938,12 +947,14 @@ void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 
 	//上一次的车辆位置
 	static std::vector<box> last_pos;
+	static int last_thread_id = 0;
 
-	//当前为空
-	if (b.empty())
+	//换了视频
+	int current_id = GetCurrentThreadId();
+	if (current_id != last_thread_id)
 	{
 		last_pos.clear();
-		return;
+		last_thread_id = current_id;
 	}
 
 	//全部转化为真实位置
@@ -963,7 +974,7 @@ void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 			for (auto& ls : b)
 			{
 				//与公交车道相交 且 上一次这个位置没用车辆
-				if (calc_intersect(ls, region_box) && !calc_same_rect(last_pos, ls))
+				if (calc_intersect(ls, region_box) && calc_same_rect(last_pos, ls) == false)
 				{
 					car_info info;
 					//车牌检测

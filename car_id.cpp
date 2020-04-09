@@ -21,7 +21,8 @@ void train_model(const char* cfg_path, const char* weights_path, const char* cla
 //
 //int main(int argc,char* argv[])
 //{
-//
+//	if (argc != 5) printf("darknet  cfg  weights  classes  image\n");
+//	else train_model(argv[1], argv[2], argv[3], argv[4]);
 //	return 0;
 //}
 
@@ -48,11 +49,15 @@ void train_model(const char* cfg_path, const char* weights_path, const char* cla
 	const char* backup = "backup";
 	CreateDirectoryA(backup, NULL);
 
+	printf("开始读取学习数据\n");
+
 	//读取学习数据
 	data train = read_car_id_data(image_path, 32 * 32 * 3, classes);
 
 	//平均损失
 	float avg_loss = -1;
+
+	printf("开始训练\n");
 
 	//开始迭代训练
 	while (get_current_batch(net) < net.max_batches)
@@ -136,8 +141,11 @@ data read_car_id_data(const char* images_path, int image_size, int classes)
 	result_data.y = y;
 
 	//读取每一张图片
+#pragma omp parallel for num_threads(4)
 	for (int i = 0; i < all_file.size(); i++)
 	{
+		if(i && i % 1000 == 0) printf("总数 : %d  完成 : %d \n", all_file.size(), i);
+
 		//读取图片数据
 		cv::Mat src = cv::imread(all_file[i]);
 		if(src.empty()) continue;
