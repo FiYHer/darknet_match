@@ -457,6 +457,10 @@ unsigned __stdcall  analyse_video(void* prt)
 	video_info.detect_delay = &control_ptr->detect_delay;
 	video_info.scene_delay = &control_ptr->scene_delay;
 
+	//视频宽度 高度
+	video_info.video_width = control_ptr->video_size[0];
+	video_info.video_height = control_ptr->video_size[1];
+
 	//创建线程
 	int detect_threas = control_ptr->detect_count;
 	HANDLE read_handle, scene_handle;
@@ -523,12 +527,10 @@ unsigned __stdcall  analyse_video(void* prt)
 			cv::putText(video_ptr->original_frame, fps_char, cv::Point(10, 30), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(0, 0, 255), 1, 8);
 
 			//绘制区域
-			std::vector<region_mask> region(g_global_set.mask_list.size());
-			std::copy(g_global_set.mask_list.begin(), g_global_set.mask_list.end(), region.begin());
-			for (auto it : region)
+			for (auto it : g_global_set.mask_list)
 			{
 				//获取方框
-				box this_box = it.to_box();
+				box this_box = it.get_box();
 
 				//转化为真实位置
 				calc_trust_box(this_box, video_ptr->original_frame.cols, video_ptr->original_frame.rows);
@@ -580,6 +582,10 @@ unsigned __stdcall read_frame_proc(void* prt)
 	//获取
 	video_handle_info* video_info = (video_handle_info*)prt;
 
+	//获取视频宽度 高度
+	int width = video_info->video_width;
+	int height = video_info->video_height;
+
 	//开始循环读取视频帧
 	while (video_info->read_frame && !video_info->break_state)
 	{
@@ -594,6 +600,9 @@ unsigned __stdcall read_frame_proc(void* prt)
 
 			//读取一帧视频
 			if (!video_info->cap.read(video_ptr->original_frame)) break;
+
+			//如果我们设置视频大小
+			if (width && height) cv::resize(video_ptr->original_frame, video_ptr->original_frame, cv::Size(width, height));
 
 			//尝试取得控制权
 			video_info->entry();
@@ -945,18 +954,6 @@ void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 	if (++last_tick < g_global_set.fps[0]) return;
 	last_tick = 0;
 
-	//上一次的车辆位置
-	static std::vector<box> last_pos;
-	static int last_thread_id = 0;
-
-	//换了视频
-	int current_id = GetCurrentThreadId();
-	if (current_id != last_thread_id)
-	{
-		last_pos.clear();
-		last_thread_id = current_id;
-	}
-
 	//全部转化为真实位置
 	for (auto& it : b) calc_trust_box(it, width, height);
 
@@ -967,14 +964,14 @@ void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 		if (it.type == region_bus_lane)
 		{
 			//公交车道真实位置
-			box region_box = it.to_box();
+			box region_box = it.get_box();
 			calc_trust_box(region_box, width, height);
 
 			//车辆与公交车道是否相交
 			for (auto& ls : b)
 			{
 				//与公交车道相交 且 上一次这个位置没用车辆
-				if (calc_intersect(ls, region_box) && calc_same_rect(last_pos, ls) == false)
+				if (calc_intersect(ls, region_box))
 				{
 					car_info info;
 					//车牌检测
@@ -995,9 +992,6 @@ void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 			}
 		}
 	}
-
-	//保存这一次的位置
-	last_pos = std::move(b);
 }
 
 

@@ -133,10 +133,14 @@ struct video_control
 	//显示延迟 读取延迟 检测延迟 场景延迟
 	int show_delay, read_delay, detect_delay, scene_delay;
 
+	//视频宽度 高度
+	int video_size[2];
+
 	video_control() :leave(true), detect_count(6) 
 	{
 		use_camera = camera_index = 0;
 		show_delay = read_delay = detect_delay = scene_delay = 10;
+		video_size[0] = video_size[1] = 0;
 	}
 };
 
@@ -197,12 +201,16 @@ struct video_handle_info
 	//各线程延迟设置
 	int *show_delay, *read_delay, *detect_delay, *scene_delay;
 
+	//视频宽度 高度
+	int video_width, video_height;
+
 	void initialize()
 	{ 
 		break_state = false;
 		read_frame = detect_frame = true;
 		max_frame_count = 50;
 		show_delay = read_delay = detect_delay = scene_delay = nullptr;
+		video_width = video_height = 0;
 		InitializeCriticalSection(&critical_srction); 
 	}
 	void entry() { EnterCriticalSection(&critical_srction); }
@@ -297,8 +305,8 @@ struct region_mask
 	region_mask() {}
 	region_mask(ImVec2 p1, ImVec2 p2, ImVec4 c, region_type t) :pos(p1), size(p2), rect_color(c), type(t) {}
 	
-	//转化为相对位置
-	box to_box()
+	//相对位置
+	box get_box()
 	{
 		float w_scale = 1.0f / window_size.x;
 		float h_scale = 1.0f / window_size.y;

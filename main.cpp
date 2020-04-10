@@ -52,8 +52,8 @@ global_set g_global_set;
 //	return 0;
 //}
 
-//int main(int argc,char* argv[])
-int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+int main(int argc,char* argv[])
+//int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
 	register_window_struct();
 	create_window();
@@ -211,7 +211,7 @@ void imgui_show_handle()
 	ImGui::NewFrame();
 
 	//开始渲染一系列窗口
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 	imgui_show_manager();
 	imgui_file_set_window();
 	imgui_test_picture_window();
@@ -401,11 +401,12 @@ void imgui_test_video_window()
 		ImGui::Checkbox(u8"斑马线不礼让行人", &g_global_set.secne_set.not_zebra_cross);
 	}
 
-	if (ImGui::CollapsingHeader(u8"颜色"))
+	if (ImGui::CollapsingHeader(u8"设置"))
 	{
 		ImGui::ColorEdit3(u8"方框颜色", g_global_set.color_set.box_rgb);
 		ImGui::ColorEdit3(u8"字体颜色", g_global_set.color_set.font_rgb);
 		ImGui::InputFloat(u8"线条厚度", &g_global_set.color_set.thickness, 0.01f, 1.0f, "%.3f");
+		ImGui::InputInt2(u8"视频大小", control_info.video_size);
 	}
 
 	ImGui::RadioButton(u8"视频模式", &control_info.use_camera,0);
@@ -506,7 +507,7 @@ void imgui_load_region_window()
 		static char video_path[default_char_size];
 		if (ImGui::BeginMenu(u8"读取一帧视频"))
 		{
-			if (ImGui::Button(u8"read") && select_type_file("video file\0*.mp4;0*.avi\0\0", video_path, default_char_size))
+			if (ImGui::Button(u8"read") && select_type_file("video file\0*.mp4;*.avi;*.flv\0\0", video_path, default_char_size))
 			{
 				read_video_frame(video_path);
 				set_step = 0;
