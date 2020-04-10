@@ -910,34 +910,33 @@ void calc_trust_box(box& b, int width, int height)
 	if (top < 0) top = 0;
 	if (bot > height - 1) bot = height - 1;
 
-	b.x = left;
-	b.y = top;
-	b.h = bot;
-	b.w = right;
+	b.x = left;//开始位置的x
+	b.y = top;//开始位置的y
+	b.w = right;//结束位置的x
+	b.h = bot;//结束位置的y
 }
 
 bool calc_intersect(box b1, box b2, float ratio)
 {
-	//小在左 大在右
-	if (b1.x > b2.x)
+	//交换
+	auto self_swap = [](box& _b1, box& _b2)
 	{
-		box temp = b1;
-		b1 = b2;
-		b2 = temp;
-	}
+		box temp = _b1;
+		_b1 = _b2;
+		_b2 = temp;
+	};
 
-	//一点不相交
-	if (b1.x + b1.w < b2.x) return false;
-	else if (b1.y + b1.h < b2.y) return false;
+	//左右相交判断
+	if (b1.x > b2.x) self_swap(b1, b2);
+	if (b1.w <= b2.x) return false;
+	float radio_w = (b1.w - b2.x) / (b2.w - b1.x);
 
-	//计算相交率
-	float width = b1.x + b1.w - b2.x;
-	float height = b1.y + b1.h - b2.y;
-	float b1_w_area = width / b1.w;
-	float b1_h_area = height / b1.h;
-	float b2_w_area = width / b2.w;
-	float b2_h_area = height / b2.h;
-	if (b1_w_area >= ratio || b1_h_area >= ratio || b2_w_area >= ratio || b2_h_area >= ratio) return true;
+	//上下相交判断
+	if (b1.y > b2.y) self_swap(b1, b2);
+	if (b1.h <= b2.y) return false;
+	float radio_h = (b1.h - b2.y) / (b2.h - b1.y);
+
+	if (radio_w > ratio || radio_h > ratio) return true;
 	else return false;
 }
 
@@ -954,6 +953,9 @@ void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 	if (++last_tick < g_global_set.fps[0]) return;
 	last_tick = 0;
 
+	//上一次车辆位置
+	static std::vector<box> last_pos;
+
 	//全部转化为真实位置
 	for (auto& it : b) calc_trust_box(it, width, height);
 
@@ -968,30 +970,40 @@ void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 			calc_trust_box(region_box, width, height);
 
 			//车辆与公交车道是否相交
-			for (auto& ls : b)
+			for (int i = 0; i < b.size(); i++)
 			{
-				//与公交车道相交 且 上一次这个位置没用车辆
-				if (calc_intersect(ls, region_box))
+				//与公交车道相交
+				if (calc_intersect(region_box, b[i]))
 				{
-					car_info info;
-					//车牌检测
-					//........
+					//不是同一辆
+					if (!calc_same_rect(last_pos, b[i]))
+					{
+						car_info info;
+						//车牌检测
+						//........
 
-					//获取当前时间
-					time_t timep;
-					time(&timep);
-					struct tm *prt = gmtime(&timep);
-					info.times[0] = prt->tm_year + 1900;//年
-					info.times[1] = prt->tm_mon + 1;//月
-					info.times[2] = prt->tm_mday;//日
-					info.times[3] = prt->tm_hour + 8;//时
-					info.times[4] = prt->tm_min;//分
-					info.times[5] = prt->tm_sec;//秒
-					g_global_set.secne_set.occupy_bus_list.push_back(std::move(info));
+						//获取当前时间
+						time_t timep;
+						time(&timep);
+						struct tm *prt = gmtime(&timep);
+						info.times[0] = prt->tm_year + 1900;//年
+						info.times[1] = prt->tm_mon + 1;//月
+						info.times[2] = prt->tm_mday;//日
+						info.times[3] = prt->tm_hour + 8;//时
+						info.times[4] = prt->tm_min;//分
+						info.times[5] = prt->tm_sec;//秒
+						g_global_set.secne_set.occupy_bus_list.push_back(std::move(info));
+					}
+				}
+				else//不相交 删除之
+				{
+					b.erase(b.begin() + i);
+					i--;
 				}
 			}
 		}
 	}
+	last_pos = std::move(b);
 }
 
 
