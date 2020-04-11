@@ -253,20 +253,20 @@ void imgui_show_manager()
 
 	//显示显卡相关信息
 	for (int i = 0; i < gpu_count; i++)
-		ImGui::BulletText(u8"GPU型号  [%s]", gpu_info[i].name);
+		ImGui::BulletText(u8"GPU型号\t %s", gpu_info[i].name);
 
 	//获取系统类型
 	static int os_type = get_os_type();
-	if(os_type == -1) ImGui::BulletText(u8"系统类型  [未知]");
-	else ImGui::BulletText(u8"系统类型  [Windows %d]", os_type);
+	if(os_type == -1) ImGui::BulletText(u8"系统类型\t 未知");
+	else ImGui::BulletText(u8"系统类型\t Windows %d", os_type);
 
 	//显示CPU核心数
 	static int cpu_kernel = get_cpu_kernel();
-	ImGui::BulletText(u8"CPU核心  [%d]", cpu_kernel);
+	ImGui::BulletText(u8"CPU核心\t %d", cpu_kernel);
 
 	//显示内存总数
 	static int phy_memory = get_physical_memory();
-	ImGui::BulletText(u8"物理内存  [%dg]", phy_memory);
+	ImGui::BulletText(u8"物理内存\t %d", phy_memory);
 
 	ImGui::Separator();
 	if (ImGui::Button(u8"文件配置窗口")) g_global_set.imgui_show_set.show_file_set_window = true;
@@ -325,7 +325,6 @@ void imgui_test_picture_window()
 	ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
 	ImGui::Begin(u8"智能交通系统  -  测试图片窗口",&g_global_set.imgui_show_set.show_test_picture_window);
 
-	static bool show_window = true;
 	static set_detect_info detect_info;
 
 	//图片检测控制
@@ -334,8 +333,6 @@ void imgui_test_picture_window()
 		ImGui::InputFloat(u8"thresh", &detect_info.thresh, 0.01f, 1.0f, "%.3f");
 		ImGui::InputFloat(u8"hier_thresh", &detect_info.hier_thresh, 0.01f, 1.0f, "%.3f");
 		ImGui::InputFloat(u8"nms", &detect_info.nms, 0.01f, 1.0f, "%.3f");
-
-		ImGui::Checkbox(u8"显示窗口", &show_window);
 	}
 
 	//颜色控制
@@ -346,22 +343,21 @@ void imgui_test_picture_window()
 		ImGui::InputFloat(u8"线条厚度", &g_global_set.color_set.thickness, 0.01f, 1.0f, "%.3f");
 	}
 
+	//获取可用区域大小
 	const ImVec2 size = ImGui::GetContentRegionAvail();
 
 	static char target_picture[default_char_size] = "match.jpg";
 	ImGui::InputText(u8"测试图片", (char*)string_to_utf8(target_picture).c_str(), default_char_size);
-	if (ImGui::Button(u8"选择图片", ImVec2(size.x / 2, 0.0f))) select_type_file("image file\0*.jpg;0*.bmp;0*.png\0\0", target_picture, default_char_size);
+	if (ImGui::Button(u8"选择图片", ImVec2(size.x / 2, 0.0f))) select_type_file("image file\0*.jpg;*.bmp;*.png\0\0", target_picture, default_char_size);
 	ImGui::SameLine();
 
 	if (ImGui::Button(u8"执行检测", ImVec2(size.x / 2, 0.0f)))
 	{
-		if (g_global_set.net_set.initizlie) analyse_picture(target_picture, detect_info, show_window);
+		if (g_global_set.net_set.initizlie) analyse_picture(target_picture, detect_info);
 		else show_window_tip("网络没有初始化");
 	}
 
-	//存在图像纹理，就显示图片
-	if (g_global_set.direct3dtexture9)
-		ImGui::Image(g_global_set.direct3dtexture9, ImGui::GetContentRegionAvail());
+	ImGui::BulletText(u8"检测耗时 : %.2lfms ", detect_info.detect_time);
 
 	ImGui::End();
 }
@@ -468,11 +464,10 @@ void imgui_test_video_window()
 
 		//显示
 		for (auto& it : g_global_set.secne_set.occupy_bus_list)
-			ImGui::BulletText(u8"%d年%d月%d日%d时%d分%d秒 占用公交车道",
+			ImGui::BulletText(u8"占用公交车道 - %d年%d月%d日%d时%d分%d秒",
 				it.times[0], it.times[1], it.times[2], it.times[3], it.times[4], it.times[5]);
 		ImGui::Separator();
 	}
-
 
 	ImGui::End();
 }
@@ -481,12 +476,17 @@ void imgui_load_region_window()
 {
 	if (!g_global_set.imgui_show_set.show_set_load_region_window) return;
 
+	//设置窗口得大小和位置
 	ImGui::SetNextWindowSize(ImVec2{ 600,600 }, ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowPos(ImVec2{ 0,0 });
-	ImGui::Begin(u8"region set", &g_global_set.imgui_show_set.show_set_load_region_window, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoMove);
+	ImGui::Begin(u8"区域标记", &g_global_set.imgui_show_set.show_set_load_region_window, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoMove);
 
 	//获取绘制句柄
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+	//获取大小和位置
+	const ImVec2 window_size = { ImGui::GetWindowWidth(),ImGui::GetWindowHeight() };
+	const ImVec2 current_pos = { ImGui::GetIO().MousePos.x,ImGui::GetIO().MousePos.y };
 
 	//方框颜色
 	static ImVec4 colf = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
@@ -495,52 +495,49 @@ void imgui_load_region_window()
 	//方框信息
 	static region_mask region_info;
 
-	//步骤
+	//步骤 和 开始位置
 	static int set_step = 0;
-
-	//开始位置
 	static ImVec2 start_pos{ -1,-1 };
 
+	//清空 重新开始
+	auto clear_start_pos = []()
+	{
+		set_step = 0;
+		start_pos = { -1,-1 };
+	};
+
+	//先绘制图片
+	if (g_global_set.direct3dtexture9)
+		ImGui::Image(g_global_set.direct3dtexture9, ImGui::GetContentRegionAvail());
+	
 	//控制相关
 	if (ImGui::BeginMenuBar())
 	{
 		static char video_path[default_char_size];
-		if (ImGui::BeginMenu(u8"读取一帧视频"))
+		if (ImGui::BeginMenu(u8"操作相关"))
 		{
-			if (ImGui::Button(u8"read") && select_type_file("video file\0*.mp4;*.avi;*.flv\0\0", video_path, default_char_size))
+			if (ImGui::Button(u8"读取一帧视频图像") && select_type_file("video file\0*.mp4;*.avi;*.flv\0\0", video_path, default_char_size))
 			{
 				read_video_frame(video_path);
-				set_step = 0;
+				clear_start_pos();
 			}
-			ImGui::EndMenu();
-		}
-		if (ImGui::BeginMenu(u8"标记斑马线"))
-		{
-			if (ImGui::Button(u8"set"))
+			if (ImGui::Button(u8"标记斑马线的通道"))
 			{
 				colf.w = colf.y = 1.0f; colf.x = colf.z = 0;
 				region_info.type = region_zebra_cross;
-				set_step = 0;
+				clear_start_pos();
 			}
-			ImGui::EndMenu();
-		}
-		if (ImGui::BeginMenu(u8"标记公交车专用道"))
-		{
-			if (ImGui::Button(u8"set"))
+			if (ImGui::Button(u8"标记公交车专用道"))
 			{
 				colf.w = colf.z = 1.0f; colf.y = colf.x = 0;
 				region_info.type = region_bus_lane;
-				set_step = 0;
+				clear_start_pos();
 			}
-			ImGui::EndMenu();
-		}
-		if (ImGui::BeginMenu(u8"标记路边车位"))
-		{
-			if (ImGui::Button(u8"set"))
+			if (ImGui::Button(u8"标记马路边停车位"))
 			{
 				colf.w = colf.x = 1.0f; colf.y = colf.z = 0;
 				region_info.type = region_street_parking;
-				set_step = 0;
+				clear_start_pos();
 			}
 			ImGui::EndMenu();
 		}
@@ -556,14 +553,6 @@ void imgui_load_region_window()
 		ImGui::EndMenuBar();
 	}
 
-	//先绘制图片
-	if (g_global_set.direct3dtexture9)
-		ImGui::Image(g_global_set.direct3dtexture9, ImGui::GetContentRegionAvail());
-
-	//获取位置
-	const ImVec2 window_size = { ImGui::GetWindowWidth(),ImGui::GetWindowHeight() };
-	const ImVec2 current_pos = { ImGui::GetIO().MousePos.x,ImGui::GetIO().MousePos.y };
-	
 	//鼠标左键按下
 	if (ImGui::IsMouseClicked(0))
 	{
@@ -580,13 +569,12 @@ void imgui_load_region_window()
 			if (abs(current_pos.x - start_pos.x) < 10.0f && abs(current_pos.y - start_pos.y) < 10.0f) {}
 			else
 			{
-				region_info.window_size = { window_size.x,window_size.y - 50.0f };
-				region_info.pos = start_pos;
-				region_info.size = current_pos;
-				region_info.rect_color = colf;
+				region_info.window_size = { window_size.x,window_size.y - 50.0f};//保存窗口大小
+				region_info.pos = start_pos;//保存开始位置
+				region_info.size = current_pos;//保存结束
+				region_info.rect_color = colf;//保存颜色
 				g_global_set.mask_list.push_back(region_info);
-				start_pos = { -1,-1 };
-				set_step = 0;
+				clear_start_pos();
 			}
 		}
 	}
@@ -595,17 +583,13 @@ void imgui_load_region_window()
 	if (ImGui::IsMouseClicked(1))
 	{
 		if (!set_step && g_global_set.mask_list.size()) g_global_set.mask_list.pop_back();
-		else
-		{
-			set_step = 0;
-			start_pos = { -1,-1 };
-		}
+		else clear_start_pos();
 	}
 
 	//显示队列中的方框
 	for (auto& it : g_global_set.mask_list) draw_list->AddRect(it.pos, it.size, ImColor(it.rect_color), 0.0f, 0, 1.0f);
 
-	//绘制方框
+	//绘制当前的方框
 	if (start_pos.x != -1 && start_pos.y != -1) draw_list->AddRect(start_pos, current_pos, col, 0.0f, 0, 1.0f);
 
 	ImGui::End();

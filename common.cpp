@@ -144,7 +144,7 @@ bool initialize_net(const char* names_file, const char* cfg_file, const char* we
 	//加载权重文件
 	load_weights(&g_global_set.net_set.match_net, (char*)weights_file);
 
-	//融合卷积
+	//batch层融合进卷积层
 	fuse_conv_batchnorm(g_global_set.net_set.match_net);
 
 	//计算二进制权重
@@ -750,7 +750,7 @@ unsigned __stdcall scene_event_proc(void* prt)
 	int width, height;
 
 	//检测线程没退出才能工作，退出了的话我们也要跟着退出
-	while (video_info->detect_frame)
+	while (video_info->detect_frame) 
 	{
 		//bug:可能检测结果不是连续帧的!!!
 		int size = video_info->scene_datas.size();
@@ -829,24 +829,8 @@ void calc_human_traffic(std::vector<box> b, int width, int height)
 	//上一次有人的位置
 	static std::vector<box> last_pos;
 
-	//当前为空
-	if (b.empty())
-	{
-		last_pos.clear();
-		human_current = 0;
-		return;
-	}
-
 	//将位置信息全部转化为真实位置
 	for (auto& it : b) calc_trust_box(it, width, height);
-
-	//上一次为空，就直接赋值
-	if (last_pos.empty())
-	{
-		human_count += b.size();
-		last_pos = std::move(b);
-		return;
-	}
 
 	//每一个人
 	for (auto& it : b) if (!calc_same_rect(last_pos, it)) human_count++;
@@ -872,24 +856,8 @@ void calc_car_traffic(std::vector<box> b, int width, int height)
 	//上次有车的位置
 	static std::vector<box> last_pos;
 
-	//当前为空
-	if (b.empty())
-	{
-		last_pos.clear();
-		car_current = 0;
-		return;
-	}
-
 	//全部转化为真实位置
 	for (auto& it : b) calc_trust_box(it, width, height);
-
-	//如果上一次为空
-	if (last_pos.empty())
-	{
-		car_current = b.size();
-		last_pos = std::move(b);
-		return;
-	}
 
 	//遍历每一辆车
 	for (auto& it : b) if (!calc_same_rect(last_pos, it)) car_count++;
@@ -936,6 +904,7 @@ bool calc_intersect(box b1, box b2, float ratio)
 	if (b1.h <= b2.y) return false;
 	float radio_h = (b1.h - b2.y) / (b2.h - b1.y);
 
+	//有一个相交率大于就判定为同一个了
 	if (radio_w > ratio || radio_h > ratio) return true;
 	else return false;
 }

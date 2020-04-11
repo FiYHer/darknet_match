@@ -339,7 +339,7 @@ struct region_mask
 struct global_set
 {
 	//窗口类名称
-	char window_class_name[1024];
+	char window_class_name[default_char_size];
 
 	//窗口句柄
 	HWND window_hwnd;
@@ -352,6 +352,9 @@ struct global_set
 
 	//计算fps
 	double fps[2];
+
+	//区域标记相关
+	std::vector<region_mask> mask_list;
 
 	//图片设置
 	struct picture_info picture_set;
@@ -368,11 +371,8 @@ struct global_set
 	//颜色相关
 	struct color_info color_set;
 
-	//区域标记相关
-	std::vector<region_mask> mask_list;
-
 	//场景相关
-	scene_info secne_set;
+	struct scene_info secne_set;
 
 	//视频检测相关
 	struct set_detect_info video_detect_set;
@@ -419,7 +419,7 @@ void read_picture_data(const char* target, image& picture_data, cv::Mat& opencv_
 void mat_translate_image(const cv::Mat& opencv_data, image& image_data);
 
 //预测图片
-void analyse_picture(const char* target, set_detect_info& detect_info, bool show = false);
+void analyse_picture(const char* target, set_detect_info& detect_info, bool show = true);
 
 //绘制方框和类型
 void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name);
