@@ -100,11 +100,11 @@ void read_classes_name(std::vector<std::string>& return_data, const char* path)
 	file.close();
 }
 
-bool initialize_net(const char* names_file, const char* cfg_file, const char* weights_file)
+bool initialize_object_detect_net(const char* names_file, const char* cfg_file, const char* weights_file)
 {
-	if (g_global_set.net_set.initizlie)
+	if (g_global_set.object_detect_net_set.initizlie)
 	{
-		show_window_tip("网络不需要再次初始化");
+		show_window_tip("物体检测网络不需要再次初始化");
 		return true;
 	}
 
@@ -130,42 +130,116 @@ bool initialize_net(const char* names_file, const char* cfg_file, const char* we
 	}
 
 	//设置显卡工作
-	g_global_set.net_set.match_net.gpu_index = cuda_get_device();
-	cuda_set_device(g_global_set.net_set.match_net.gpu_index);
+	cuda_set_device(cuda_get_device());
 	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
 
 	//读取标签数据
 	int classes_number;
-	g_global_set.net_set.classes_name = get_labels_custom((char*)names_file, &classes_number);
+	g_global_set.object_detect_net_set.classes_name = get_labels_custom((char*)names_file, &classes_number);
 
 	//读取网络数据
-	g_global_set.net_set.match_net = parse_network_cfg_custom((char*)cfg_file, 1, 1);
+	g_global_set.object_detect_net_set.this_net = parse_network_cfg_custom((char*)cfg_file, 1, 1);
 
 	//加载权重文件
-	load_weights(&g_global_set.net_set.match_net, (char*)weights_file);
+	load_weights(&g_global_set.object_detect_net_set.this_net, (char*)weights_file);
 
 	//batch层融合进卷积层
-	fuse_conv_batchnorm(g_global_set.net_set.match_net);
+	fuse_conv_batchnorm(g_global_set.object_detect_net_set.this_net);
 
 	//计算二进制权重
-	calculate_binary_weights(g_global_set.net_set.match_net);
+	calculate_binary_weights(g_global_set.object_detect_net_set.this_net);
 
 	//检测标签
-	check_serious_error(g_global_set.net_set.match_net.layers[g_global_set.net_set.match_net.n - 1].classes == classes_number, "和yolo层标签数不符");
-	g_global_set.net_set.classes = classes_number;
+	if (g_global_set.object_detect_net_set.this_net.layers[g_global_set.object_detect_net_set.this_net.n - 1].classes != classes_number)
+	{
+		show_window_tip("网络标签数与配置文件标签数不一致");
+		clear_object_detect_net();
+		return false;
+	}
+	g_global_set.object_detect_net_set.classes = classes_number;
 
 	//设置状态
-	g_global_set.net_set.initizlie = true;
+	g_global_set.object_detect_net_set.initizlie = true;
 
 	//返回结果
 	return true;
 }
 
-void clear_net()
+bool initialize_car_id_identify_net(const char* names_file, const char* cfg_file, const char* weights_file, int top /*= 1*/)
 {
-	if (g_global_set.net_set.classes_name) free_ptrs((void**)g_global_set.net_set.classes_name, g_global_set.net_set.classes);
-	free_network(g_global_set.net_set.match_net);
-	g_global_set.net_set.initizlie = false;
+	if (g_global_set.car_id_identify_net.initizlie)
+	{
+		show_window_tip("车牌识别网络不需要再次初始化");
+		return true;
+	}
+
+	//判断names文件是否存在
+	if (!names_file || !strstr(names_file, ".names") || access(names_file, 0) == -1)
+	{
+		show_window_tip("names文件不存在");
+		return false;
+	}
+
+	//判断cfg文件是否存在
+	if (!cfg_file || !strstr(cfg_file, ".cfg") || access(cfg_file, 0) == -1)
+	{
+		show_window_tip("cfg文件不存在");
+		return false;
+	}
+
+	//判断weights文件是否存在
+	if (!weights_file || !strstr(weights_file, ".weights") || access(weights_file, 0) == -1)
+	{
+		show_window_tip("weights文件不存在");
+		return false;
+	}
+
+	//加载网络
+	g_global_set.car_id_identify_net.this_net = parse_network_cfg_custom((char*)cfg_file, 1, 0);
+
+	//加载权重
+	load_weights(&g_global_set.car_id_identify_net.this_net, (char*)weights_file);
+
+	//设置批量为1
+	set_batch_network(&g_global_set.car_id_identify_net.this_net, 1);
+
+	//融合batch进卷积层
+	fuse_conv_batchnorm(g_global_set.car_id_identify_net.this_net);
+
+	//计算二进制权重
+	calculate_binary_weights(g_global_set.car_id_identify_net.this_net);
+
+	//获取标签数
+	g_global_set.car_id_identify_net.classes_name = get_labels_custom((char*)names_file, &g_global_set.car_id_identify_net.classes);
+
+	//设置状态
+	g_global_set.car_id_identify_net.initizlie = true;
+
+	return true;
+}
+
+void clear_object_detect_net()
+{
+	//释放标签字符串
+	if (g_global_set.object_detect_net_set.classes_name) free_ptrs((void**)g_global_set.object_detect_net_set.classes_name, g_global_set.object_detect_net_set.classes);
+	
+	//释放网络
+	free_network(g_global_set.object_detect_net_set.this_net);
+
+	//设置状态
+	g_global_set.object_detect_net_set.initizlie = false;
+}
+
+void clear_car_id_identify_net()
+{
+	//释放字符串
+	if (g_global_set.car_id_identify_net.classes_name) free_ptrs((void**)g_global_set.car_id_identify_net.classes_name, g_global_set.car_id_identify_net.classes);
+
+	//释放网络
+	free_network(g_global_set.car_id_identify_net.this_net);
+
+	//设置状态
+	g_global_set.car_id_identify_net.initizlie = false;
 }
 
 void read_picture_data(const char* target, image& picture_data, cv::Mat& opencv_data, cv::Mat& rgb_data)
@@ -219,29 +293,29 @@ void analyse_picture(const char* target, set_detect_info& detect_info, bool show
 	}
 
 	//将图片数据进行缩放
-	image resize_data = resize_image(original_data, g_global_set.net_set.match_net.w, g_global_set.net_set.match_net.h);
+	image resize_data = resize_image(original_data, g_global_set.object_detect_net_set.this_net.w, g_global_set.object_detect_net_set.this_net.h);
 
 	//获取开始时间
 	double this_time = get_time_point();
 
 	//开始预测
-	network_predict(g_global_set.net_set.match_net, resize_data.data);
+	network_predict(g_global_set.object_detect_net_set.this_net, resize_data.data);
 
 	//计算预测需要的时间
 	detect_info.detect_time = ((double)get_time_point() - this_time) / 1000;
 
 	//获取方框数量
 	int box_number;
-	detection* detection_data = get_network_boxes(&g_global_set.net_set.match_net,
+	detection* detection_data = get_network_boxes(&g_global_set.object_detect_net_set.this_net,
 		original_data.w, original_data.h, detect_info.thresh, detect_info.hier_thresh, 0, 1, &box_number, 0);
 
 	//非极大值抑制
-	do_nms_sort(detection_data, box_number, g_global_set.net_set.classes, detect_info.nms);
+	do_nms_sort(detection_data, box_number, g_global_set.object_detect_net_set.classes, detect_info.nms);
 
 	//获取有效的方框数量
 	int useble_box = 0;
 	detection_with_class* detector_data = get_actual_detections(detection_data,
-		box_number, detect_info.thresh, &useble_box, g_global_set.net_set.classes_name);
+		box_number, detect_info.thresh, &useble_box, g_global_set.object_detect_net_set.classes_name);
 
 	//对每一个对象
 	for (int i = 0; i < useble_box; i++)
@@ -252,9 +326,23 @@ void analyse_picture(const char* target, set_detect_info& detect_info, bool show
 		//获取置信度
 		int confid = detector_data[i].det.prob[detector_data[i].best_class] * 100;
 
-		//绘制信息
+		//信息
 		char format[1024];
-		sprintf(format, "%s %d", g_global_set.net_set.classes_name[index], confid);
+		sprintf(format, "%s %d", g_global_set.object_detect_net_set.classes_name[index], confid);
+
+		//如果是车牌 且 车牌识别网络有加载
+		if (is_object_car_id(index) && g_global_set.car_id_identify_net.initizlie)
+		{
+			//分析车牌
+			int car_id[7];
+			detect_info.identify_time = analyse_car_id(opencv_data, detector_data[i].det.bbox, car_id);
+
+			char temp[default_char_size];
+			sprintf(temp, "  %d%d-%d%d%d%d%d", car_id[0], car_id[1], car_id[2], car_id[3], car_id[4], car_id[5], car_id[6]);
+			strcat(format, temp);
+		}
+
+		//绘制
 		draw_boxs_and_classes(opencv_data, detector_data[i].det.bbox, format);
 	}
 
@@ -277,6 +365,98 @@ void analyse_picture(const char* target, set_detect_info& detect_info, bool show
 	//清空数据
 	opencv_data.release();
 	rgb_data.release();
+}
+
+double analyse_car_id(cv::Mat& picture_data, box box_info, int* car_id_info)
+{
+	//获取车牌实际位置
+	calc_trust_box(box_info, picture_data.cols, picture_data.rows);
+
+	//把车牌区域拿出来
+	cv::Mat roi = picture_data({ (int)box_info.x,(int)box_info.y,(int)box_info.w - (int)box_info.x,(int)box_info.h - (int)box_info.y });
+
+	//验证车牌位置
+	check_car_id_rect(roi);
+
+	//总时间
+	double all_time = 0.0;
+
+	//类别数量
+	int outputs = g_global_set.car_id_identify_net.this_net.outputs;
+
+	//车牌有7位数
+	for (int i = 0; i < 7; i++)
+	{
+		//获取一位的数据
+		cv::Mat data = get_car_id_data_from_index(roi, i);
+
+		//转化
+		image temp, resized, r;
+		mat_translate_image(data, temp);
+		resized = resize_min(temp, g_global_set.car_id_identify_net.this_net.w);
+		r = crop_image(resized, (resized.w - g_global_set.car_id_identify_net.this_net.w) / 2, (resized.h - g_global_set.car_id_identify_net.this_net.h) / 2, g_global_set.car_id_identify_net.this_net.w, g_global_set.car_id_identify_net.this_net.h);
+		
+		//获取开始时间
+		double this_time = get_time_point();
+
+		//预测
+		float *predictions = network_predict(g_global_set.car_id_identify_net.this_net, r.data);
+
+		//总时间
+		all_time += ((double)get_time_point() - this_time) / 1000.0f;
+
+		//获取概率最高的
+		get_max_car_id(predictions, outputs, car_id_info[i]);
+
+		//释放内存
+		data.release();
+
+		if (r.data != temp.data) free_image(r);
+		free_image(temp);
+		free_image(resized);
+	}
+
+	//返回耗时
+	return all_time;
+}
+
+void check_car_id_rect(cv::Mat roi)
+{
+
+}
+
+cv::Mat get_car_id_data_from_index(cv::Mat& data, int index)
+{
+	int width = data.cols;
+	int height = data.rows;
+	cv::Mat roi, buffer;
+	if (index <= 1)
+	{
+		width = width / 9 * 3;
+		int per = width / 2;
+		roi = data({ index * per,0,per,height });
+	}
+	else
+	{
+		index -= 2;
+		int start = width / 9 * 3;
+		int length = width - start;
+		int per = length / 5;
+		roi = data({ start + (index * per),0,per,height });
+	}
+	cv::cvtColor(roi, buffer, cv::COLOR_RGB2BGR);
+	return buffer;
+}
+
+void get_max_car_id(float* predictions, int count, int& index, float* confid)
+{
+	//查找最大值索引
+	index = 0;
+	for (int i = 1; i < count; i++)
+		if (predictions[index] < predictions[i]) index = i;
+
+	//置信度
+	if (confid) *confid = predictions[index];
 }
 
 void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name)
@@ -629,15 +809,15 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 	video_handle_info* video_info = (video_handle_info*)prt;
 
 	//网络的输入宽度和高度
-	int input_width = g_global_set.net_set.match_net.w;
-	int input_height = g_global_set.net_set.match_net.h;
-	int input_channel = g_global_set.net_set.match_net.c;
+	int input_width = g_global_set.object_detect_net_set.this_net.w;
+	int input_height = g_global_set.object_detect_net_set.this_net.h;
+	int input_channel = g_global_set.object_detect_net_set.this_net.c;
 
 	//类型数量
-	int classes = g_global_set.net_set.classes;
+	int classes = g_global_set.object_detect_net_set.classes;
 
 	//类型名称
-	char** names = g_global_set.net_set.classes_name;
+	char** names = g_global_set.object_detect_net_set.classes_name;
 
 	//获取阈值信息
 	const float& thresh = g_global_set.video_detect_set.thresh;
@@ -683,11 +863,11 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			mat_translate_image(rgb_data, original_data);
 
 			//网络预测
-			network_predict(g_global_set.net_set.match_net, original_data.data);
+			network_predict(g_global_set.object_detect_net_set.this_net, original_data.data);
 
 			//获取方框数量
 			int box_count = 0;
-			detection* detect_data = get_network_boxes(&g_global_set.net_set.match_net, input_width, input_height, thresh, hier_thresh, 0, 1, &box_count, 0);
+			detection* detect_data = get_network_boxes(&g_global_set.object_detect_net_set.this_net, input_width, input_height, thresh, hier_thresh, 0, 1, &box_count, 0);
 
 			//进行非极大值抑制
 			do_nms_sort(detect_data, box_count, classes, nms);
@@ -745,7 +925,7 @@ unsigned __stdcall scene_event_proc(void* prt)
 	float &thresh = g_global_set.video_detect_set.thresh;
 
 	//获取类数量
-	int classes = g_global_set.net_set.classes;
+	int classes = g_global_set.object_detect_net_set.classes;
 
 	int width, height;
 
@@ -1023,10 +1203,14 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 
 	printf("图片总数量 %d \n", picture_list.size());
 
+	float thresh = 0.5f;
+	float hier_thresh = 0.5f;
+	float nms = 0.5f;
+
 	//遍历每一张图片
 	for (int i = 0; i < picture_list.size(); i++)
 	{
-		if (i && i % 100 == 0) printf("图片数量 %d    完成数量 : %d \n", picture_list.size(), i);
+		if (i && i % 500 == 0) printf("图片数量 %d    完成数量 : %d \n", picture_list.size(), i);
 
 		//构建名称
 		std::string jpg_name = path;
@@ -1042,14 +1226,14 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 
 		//获取对象信息
 		int nboxes = 0;
-		detection *dets = get_network_boxes(&net, im.w, im.h, .25f, .5f, 0, 1, &nboxes, 0);
+		detection *dets = get_network_boxes(&net, im.w, im.h, thresh, hier_thresh, 0, 1, &nboxes, 0);
 
 		//非极大值抑制
-		do_nms_sort(dets, nboxes, net.layers[net.n - 1].classes, .4f);
+		do_nms_sort(dets, nboxes, net.layers[net.n - 1].classes, nms);
 
 		//获取有效方框
 		int detections_num;
-		detection_with_class* selected_detections = get_actual_detections(dets, nboxes, .25f, &detections_num, names);
+		detection_with_class* selected_detections = get_actual_detections(dets, nboxes, thresh, &detections_num, names);
 
 		//有对象就创建文件
 		if (detections_num)
@@ -1096,7 +1280,7 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 			//关闭文件
 			file.close();
 
-			//没有对象就删除文件
+			//没有对象就删除txt文件
 			if (useful_count == 0) DeleteFileA(file_name.c_str());
 		}
 

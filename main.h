@@ -31,8 +31,11 @@ void imgui_show_handle();
 //imgui界面管理器
 void imgui_show_manager();
 
-//文件设置窗口
-void imgui_file_set_window();
+//物体检测配置窗口
+void imgui_object_detect_window();
+
+//车牌识别配置窗口
+void imgui_car_id_identify_window();
 
 //测试图片窗口
 void imgui_test_picture_window();

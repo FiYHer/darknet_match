@@ -17,6 +17,7 @@
 #pragma comment(lib,"d3d9.lib")
 
 #include "list.h"
+#include "utils.h"
 #include "data.h"
 #include "parser.h"
 #include "option_list.h"
@@ -32,6 +33,19 @@
 
 //默认字符串大小
 constexpr int default_char_size = 1024;
+
+//检测对象类型
+enum detect_object_type
+{
+	object_type_car_id,//车牌
+	object_type_car,//车辆
+	object_type_person,//人类
+	object_type_motorbike,//摩托车
+	object_type_bicycle,//自行车
+	object_type_trafficlight,//红绿灯
+	object_type_dog,//狗
+	object_type_bus//公交车
+};
 
 //对象信息
 struct object_info
@@ -103,7 +117,8 @@ struct scene_info
 //分析相关
 struct set_detect_info
 {
-	double detect_time;//检测耗时
+	double detect_time;//物体检测耗时
+	double identify_time;//车牌识别耗时
 
 	float thresh;//阈值
 	float hier_thresh;//阈值
@@ -233,14 +248,17 @@ struct net_info_set
 	int classes;//类别数量
 
 	char** classes_name;//标签名字
-	struct network match_net;//网络结构
+	struct network this_net;//网络结构
 };
 
 //界面显示信息
 struct imgui_set
 {
-	//文件配置窗口
-	bool show_file_set_window;
+	//物体检测模型
+	bool show_object_detect_window;
+
+	//车牌识别模型
+	bool show_car_id_identify_window;
 
 	//测试图片窗口
 	bool show_test_picture_window;
@@ -365,8 +383,11 @@ struct global_set
 	//界面显示相关
 	struct imgui_set imgui_show_set;
 
-	//网络层相关
-	struct net_info_set net_set;
+	//物体检测网络相关
+	struct net_info_set object_detect_net_set;
+
+	//车牌识别网络相关
+	struct net_info_set car_id_identify_net;
 
 	//颜色相关
 	struct color_info color_set;
@@ -384,9 +405,6 @@ void check_serious_error(bool state, const char* show_str = "");
 
 //显示窗口提示
 void show_window_tip(const char* str);
-
-//获取显卡的数量
-int get_gpu_count();
 
 //获取显卡相关信息
 cudaDeviceProp* get_gpu_infomation(int gpu_count);
@@ -406,11 +424,27 @@ bool select_type_file(const char* type_file, char* return_str, int return_str_si
 //读取标签名称
 void read_classes_name(std::vector<std::string>& return_data, const char* path);
 
-//初始化网络
-bool initialize_net(const char* names_file, const char* cfg_file, const char* weights_file);
+//初始化物体检测网络
+bool initialize_object_detect_net(const char* names_file, const char* cfg_file, const char* weights_file);
 
-//清理网络
-void clear_net();
+//初始化车牌识别网络
+bool initialize_car_id_identify_net(const char* names_file, const char* cfg_file, const char* weights_file, int top = 1);
+
+//清理物体检测网络
+void clear_object_detect_net();
+
+//清理车牌识别网络
+void clear_car_id_identify_net();
+
+//类型判断
+inline bool is_object_car_id(int index) { return index == object_type_car_id; }
+inline bool is_object_car(int index) { return index == object_type_car; }
+inline bool is_object_person(int index) { return index == object_type_person; }
+inline bool is_object_motorbike(int index) { return index == object_type_motorbike; }
+inline bool is_object_bicycle(int index) { return index == object_type_bicycle; }
+inline bool is_object_trafficlight(int index) { return index == object_type_trafficlight; }
+inline bool is_object_dog(int index) { return index == object_type_dog; }
+inline bool is_object_bus(int index) { return index == object_type_bus; }
 
 //加载图片数据
 void read_picture_data(const char* target, image& picture_data, cv::Mat& opencv_data, cv::Mat& rgb_data);
@@ -420,6 +454,18 @@ void mat_translate_image(const cv::Mat& opencv_data, image& image_data);
 
 //预测图片
 void analyse_picture(const char* target, set_detect_info& detect_info, bool show = true);
+
+//预测车牌
+double analyse_car_id(cv::Mat& picture_data, box box_info, int* car_id_info);
+
+//验证车牌区域
+void check_car_id_rect(cv::Mat roi);
+
+//获取车牌指定位数图像信息
+cv::Mat get_car_id_data_from_index(cv::Mat& data, int index);
+
+//获取车牌索引和置信度
+void get_max_car_id(float* predictions, int count, int& index, float* confid = nullptr);
 
 //绘制方框和类型
 void draw_boxs_and_classes(cv::Mat& picture_data, box box_info, const char* name);

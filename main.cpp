@@ -1,20 +1,19 @@
 #include "main.h"
 
 global_set g_global_set;
-
+//
 //int main(int argc, char* argv[])
 //{
 //	//设置显示工作
 //	int gpu_index;
 //	cudaGetDeviceCount(&gpu_index);
-//	cuda_set_device(0);
+//	cuda_set_device(gpu_index - 1);
 //	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
 //
 //	std::map<std::string, int> class_names;
 //	class_names.insert({ "car",1 });
-//	class_names.insert({ "train" ,1 });
 //	class_names.insert({ "truck" ,1 });
-//	class_names.insert({ "person" ,2});
+//	class_names.insert({ "person" ,2 });
 //	class_names.insert({ "motorbike",3 });
 //	class_names.insert({ "bicycle" ,4 });
 //	class_names.insert({ "traffic light",5 });
@@ -23,37 +22,16 @@ global_set g_global_set;
 //
 //	std::vector<std::string> buffer
 //	{
-//		"H:\\CarPicture\\Coco2017",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20011",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20012",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20032",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20033",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20034",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20035",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20051",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20052",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20061",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20062",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20063",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20064",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_20065",
-//		"H:\\CarPicture\\Insight-MVT_Annotation_Train\\MVI_39761",
-//		"H:\\CarPicture\\run_load",
-//		"H:\\CarPicture\\run_load1",
-//		"H:\\CarPicture\\run_load2",
-//		"H:\\CarPicture\\run_load3",
-//		"H:\\CarPicture\\run_load4",
-//		"H:\\CarPicture\\run_load5"
 //	};
-//	for(auto& it : buffer)
-//		picture_to_label(it.c_str(), class_names);
+//
+//	for (auto& it : buffer) picture_to_label(it.c_str(), class_names);
 //	printf("标记完成!------------------------------------------------------");
 //	getchar();
 //	return 0;
 //}
 
 int main(int argc,char* argv[])
-//int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+////int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
 	register_window_struct();
 	create_window();
@@ -89,7 +67,7 @@ LRESULT _stdcall window_process(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
 void register_window_struct()
 {
 	srand((unsigned int)time(0));
-	sprintf(g_global_set.window_class_name, "中国软件杯_交通智能系统_桂林电子科技大学北海校区_测试程序_%d", rand());
+	sprintf(g_global_set.window_class_name, "基于计算机视觉的交通场景智能应用__%d", rand());
 
 	WNDCLASSEXA window_class{
 		sizeof(WNDCLASSEXA),
@@ -104,7 +82,7 @@ void register_window_struct()
 		NULL,
 		g_global_set.window_class_name,
 	};
-	check_serious_error(RegisterClassExA(&window_class),"注册窗口类失败");
+	check_serious_error(RegisterClassExA(&window_class), "注册窗口类失败");
 }
 
 void create_window()
@@ -213,7 +191,8 @@ void imgui_show_handle()
 	//开始渲染一系列窗口
 	//ImGui::ShowDemoWindow();
 	imgui_show_manager();
-	imgui_file_set_window();
+	imgui_object_detect_window();
+	imgui_car_id_identify_window();
 	imgui_test_picture_window();
 	imgui_test_video_window();
 	imgui_load_region_window();
@@ -232,7 +211,7 @@ void imgui_show_handle()
 		g_global_set.direct3ddevice9->EndScene();
 	}
 	HRESULT result = g_global_set.direct3ddevice9->Present(NULL, NULL, NULL, NULL);
-	if (result == D3DERR_DEVICELOST 
+	if (result == D3DERR_DEVICELOST
 		&& g_global_set.direct3ddevice9->TestCooperativeLevel() == D3DERR_DEVICENOTRESET) reset_d3d9_device();
 
 	//释放图片纹理内存
@@ -241,12 +220,13 @@ void imgui_show_handle()
 
 void imgui_show_manager()
 {
+	//设置窗口的大小和位置
 	ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
-
+	ImGui::SetNextWindowPos(ImVec2(0, 0));
 	ImGui::Begin(u8"智能交通系统");
 
 	//获取显卡数量
-	static int gpu_count = get_gpu_count();
+	static int gpu_count = cuda_get_device();
 
 	//获取显卡相关信息
 	static cudaDeviceProp* gpu_info = get_gpu_infomation(gpu_count);
@@ -257,7 +237,7 @@ void imgui_show_manager()
 
 	//获取系统类型
 	static int os_type = get_os_type();
-	if(os_type == -1) ImGui::BulletText(u8"系统类型\t 未知");
+	if (os_type == -1) ImGui::BulletText(u8"系统类型\t 未知");
 	else ImGui::BulletText(u8"系统类型\t Windows %d", os_type);
 
 	//显示CPU核心数
@@ -269,51 +249,85 @@ void imgui_show_manager()
 	ImGui::BulletText(u8"物理内存\t %d", phy_memory);
 
 	ImGui::Separator();
-	if (ImGui::Button(u8"文件配置窗口")) g_global_set.imgui_show_set.show_file_set_window = true;
+	if (ImGui::Button(u8"物体检测模型配置")) g_global_set.imgui_show_set.show_object_detect_window = true;
 	ImGui::SameLine();
-	if (ImGui::Button(u8"测试图片系统窗口")) g_global_set.imgui_show_set.show_test_picture_window = true;
+	if (ImGui::Button(u8"车牌识别模型配置")) g_global_set.imgui_show_set.show_car_id_identify_window = true;
+	if (ImGui::Button(u8"交通图片物体检测")) g_global_set.imgui_show_set.show_test_picture_window = true;
 	ImGui::SameLine();
-	if (ImGui::Button(u8"测试视频系统窗口")) g_global_set.imgui_show_set.show_test_video_window = true;
+	if (ImGui::Button(u8"交通视频物体检测")) g_global_set.imgui_show_set.show_test_video_window = true;
 
 	ImGui::End();
 }
 
-void imgui_file_set_window()
+void imgui_object_detect_window()
 {
-	if (!g_global_set.imgui_show_set.show_file_set_window) return;
+	if (!g_global_set.imgui_show_set.show_object_detect_window) return;
+	ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
+	ImGui::Begin(u8"物体检测", &g_global_set.imgui_show_set.show_object_detect_window);
 
-	ImGui::SetNextWindowSize(ImVec2(500,350), ImGuiCond_FirstUseEver);
-	ImGui::Begin(u8"智能交通系统  -  文件设置窗口", &g_global_set.imgui_show_set.show_file_set_window);
+	//获取可用区域大小
+	const ImVec2 size = ImGui::GetContentRegionAvail();
 
-	static char names_path[default_char_size] = "match.names";
+	static char names_path[default_char_size] = "object_detect.names";
 	ImGui::InputText(u8"*names文件路径", (char*)string_to_utf8((const char*)names_path).c_str(), default_char_size);
 
-	static char cfg_path[default_char_size] = "match.cfg";
+	static char cfg_path[default_char_size] = "object_detect.cfg";
 	ImGui::InputText(u8"*.cfg文件路径", (char*)string_to_utf8((const char*)cfg_path).c_str(), default_char_size);
 
-	static char weights_path[default_char_size] = "match.weights";
+	static char weights_path[default_char_size] = "object_detect.weights";
 	ImGui::InputText(u8"*.weights文件路径", (char*)string_to_utf8((const char*)weights_path).c_str(), default_char_size);
-
-	const ImVec2 size = ImGui::GetContentRegionAvail();
 
 	if (ImGui::Button(u8"选择*.names文件", ImVec2(size.x / 3, 0.0f))) select_type_file("names flie\0*.names\0\0", names_path);
 	ImGui::SameLine();
 	if (ImGui::Button(u8"选择*.cfg文件", ImVec2(size.x / 3, 0.0f))) select_type_file("cfg file\0*.cfg\0\0", cfg_path);
 	ImGui::SameLine();
 	if (ImGui::Button(u8"选择*.weights文件", ImVec2(size.x / 3, 0.0f))) select_type_file("weights file\0*.weights\0\0", weights_path);
-	
 	ImGui::Separator();
-	static bool load_net = false;
-	if (!load_net) ImGui::TextColored(ImVec4(0, 0, 255, 255), u8"网络初始化会卡顿20秒 请等待....");
-	else ImGui::TextColored(ImVec4(255, 0, 0, 255), u8"初始化网络成功....");
 
-	if (ImGui::Button(u8"初始化网络", ImVec2(size.x / 2, 0.0f)) && !load_net) load_net = initialize_net(names_path, cfg_path, weights_path);
+	ImGui::BulletText(u8"初始化状态 : "); ImGui::SameLine();
+	if(g_global_set.object_detect_net_set.initizlie) ImGui::TextColored(ImVec4(255, 0, 0, 255), u8"[ 是 ]");
+	else ImGui::TextColored(ImVec4(0, 0, 255, 255), u8"[ 否 ]");
+
+	if (ImGui::Button(u8"初始化物体检测网络", ImVec2(size.x / 2, 0.0f))) initialize_object_detect_net(names_path, cfg_path, weights_path);
 	ImGui::SameLine();
-	if (ImGui::Button(u8"清理网络", ImVec2(size.x / 2, 0.0f)))
-	{
-		clear_net();
-		load_net = false;
-	}
+	if (ImGui::Button(u8"释放物体检测网络", ImVec2(size.x / 2, 0.0f))) clear_object_detect_net();
+
+	ImGui::End();
+}
+
+void imgui_car_id_identify_window()
+{
+	if (!g_global_set.imgui_show_set.show_car_id_identify_window) return;
+	ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
+	ImGui::Begin(u8"车牌识别", &g_global_set.imgui_show_set.show_car_id_identify_window);
+
+	//获取可用区域大小
+	const ImVec2 size = ImGui::GetContentRegionAvail();
+
+	static char names_path[default_char_size] = "car_id.names";
+	ImGui::InputText(u8"*names文件路径", (char*)string_to_utf8((const char*)names_path).c_str(), default_char_size);
+
+	static char cfg_path[default_char_size] = "car_id.cfg";
+	ImGui::InputText(u8"*.cfg文件路径", (char*)string_to_utf8((const char*)cfg_path).c_str(), default_char_size);
+
+	static char weights_path[default_char_size] = "car_id.weights";
+	ImGui::InputText(u8"*.weights文件路径", (char*)string_to_utf8((const char*)weights_path).c_str(), default_char_size);
+
+	if (ImGui::Button(u8"选择*.names文件", ImVec2(size.x / 3, 0.0f))) select_type_file("names flie\0*.names\0\0", names_path);
+	ImGui::SameLine();
+	if (ImGui::Button(u8"选择*.cfg文件", ImVec2(size.x / 3, 0.0f))) select_type_file("cfg file\0*.cfg\0\0", cfg_path);
+	ImGui::SameLine();
+	if (ImGui::Button(u8"选择*.weights文件", ImVec2(size.x / 3, 0.0f))) select_type_file("weights file\0*.weights\0\0", weights_path);
+	ImGui::Separator();
+
+	ImGui::BulletText(u8"初始化状态 : ");
+	ImGui::SameLine();
+	if (g_global_set.car_id_identify_net.initizlie) ImGui::TextColored(ImVec4(255, 0, 0, 255), u8"[ 是 ]");
+	else ImGui::TextColored(ImVec4(0, 0, 255, 255), u8"[ 否 ]");
+
+	if (ImGui::Button(u8"初始化车牌识别网络", ImVec2(size.x / 2, 0.0f))) initialize_car_id_identify_net(names_path, cfg_path, weights_path);
+	ImGui::SameLine();
+	if (ImGui::Button(u8"释放车牌识别网络", ImVec2(size.x / 2, 0.0f))) clear_car_id_identify_net();
 
 	ImGui::End();
 }
@@ -323,7 +337,7 @@ void imgui_test_picture_window()
 	if (!g_global_set.imgui_show_set.show_test_picture_window) return;
 
 	ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
-	ImGui::Begin(u8"智能交通系统  -  测试图片窗口",&g_global_set.imgui_show_set.show_test_picture_window);
+	ImGui::Begin(u8"智能交通系统  -  测试图片窗口", &g_global_set.imgui_show_set.show_test_picture_window);
 
 	static set_detect_info detect_info;
 
@@ -353,11 +367,12 @@ void imgui_test_picture_window()
 
 	if (ImGui::Button(u8"执行检测", ImVec2(size.x / 2, 0.0f)))
 	{
-		if (g_global_set.net_set.initizlie) analyse_picture(target_picture, detect_info);
+		if (g_global_set.object_detect_net_set.initizlie) analyse_picture(target_picture, detect_info);
 		else show_window_tip("网络没有初始化");
 	}
 
-	ImGui::BulletText(u8"检测耗时 : %.2lfms ", detect_info.detect_time);
+	ImGui::BulletText(u8"物体检测耗时 : %.2lfms ", detect_info.detect_time);
+	ImGui::BulletText(u8"车牌识别耗时 : %.2lfms", detect_info.identify_time);
 
 	ImGui::End();
 }
@@ -367,7 +382,7 @@ void imgui_test_video_window()
 	if (!g_global_set.imgui_show_set.show_test_video_window) return;
 
 	ImGui::SetNextWindowSize(ImVec2(500, 700), ImGuiCond_FirstUseEver);
-	ImGui::Begin(u8"智能交通系统  -  测试视频窗口",&g_global_set.imgui_show_set.show_test_video_window);
+	ImGui::Begin(u8"智能交通系统  -  测试视频窗口", &g_global_set.imgui_show_set.show_test_video_window);
 
 	//视频控制
 	static video_control control_info;
@@ -389,7 +404,7 @@ void imgui_test_video_window()
 
 	if (ImGui::CollapsingHeader(u8"场景"))
 	{
-		ImGui::Checkbox(u8"统计人流量",&g_global_set.secne_set.human_traffic);
+		ImGui::Checkbox(u8"统计人流量", &g_global_set.secne_set.human_traffic);
 		ImGui::Checkbox(u8"统计车流量", &g_global_set.secne_set.car_traffic);
 		ImGui::Checkbox(u8"占用公交车道", &g_global_set.secne_set.occupy_bus_lane);
 		ImGui::Checkbox(u8"闯红灯", &g_global_set.secne_set.rush_red_light);
@@ -405,9 +420,9 @@ void imgui_test_video_window()
 		ImGui::InputInt2(u8"视频大小", control_info.video_size);
 	}
 
-	ImGui::RadioButton(u8"视频模式", &control_info.use_camera,0);
+	ImGui::RadioButton(u8"视频模式", &control_info.use_camera, 0);
 	ImGui::SameLine();
-	ImGui::RadioButton(u8"摄像头模式", &control_info.use_camera,1);
+	ImGui::RadioButton(u8"摄像头模式", &control_info.use_camera, 1);
 
 	if (control_info.use_camera) ImGui::InputInt(u8"摄像头索引", &control_info.camera_index);
 	else
@@ -423,12 +438,12 @@ void imgui_test_video_window()
 	if (ImGui::Button(u8"开始检测", ImVec2(size.x / 3, 0.0f)))
 	{
 		if (!control_info.leave) show_window_tip("请先停止上一个视频的检测");
-		else if (g_global_set.net_set.initizlie) _beginthreadex(NULL, 0, analyse_video, &control_info, 0, NULL);
+		else if (g_global_set.object_detect_net_set.initizlie) _beginthreadex(NULL, 0, analyse_video, &control_info, 0, NULL);
 		else show_window_tip("网络没有初始化");
 	}
 	ImGui::SameLine();
 	if (ImGui::Button(u8"停止检测", ImVec2(size.x / 3, 0.0f))) control_info.leave = true;
-	
+
 	ImGui::Columns(2, NULL, TRUE);
 	ImGui::Separator();
 	ImGui::BulletText(u8"总人流量 : %d ", g_global_set.secne_set.human_count);
@@ -509,7 +524,7 @@ void imgui_load_region_window()
 	//先绘制图片
 	if (g_global_set.direct3dtexture9)
 		ImGui::Image(g_global_set.direct3dtexture9, ImGui::GetContentRegionAvail());
-	
+
 	//控制相关
 	if (ImGui::BeginMenuBar())
 	{
@@ -569,7 +584,7 @@ void imgui_load_region_window()
 			if (abs(current_pos.x - start_pos.x) < 10.0f && abs(current_pos.y - start_pos.y) < 10.0f) {}
 			else
 			{
-				region_info.window_size = { window_size.x,window_size.y - 50.0f};//保存窗口大小
+				region_info.window_size = { window_size.x,window_size.y - 50.0f };//保存窗口大小
 				region_info.pos = start_pos;//保存开始位置
 				region_info.size = current_pos;//保存结束
 				region_info.rect_color = colf;//保存颜色
