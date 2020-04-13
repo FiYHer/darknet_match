@@ -20,6 +20,10 @@ int gpu_index = 0;
 
 #pragma comment(lib, "cuda.lib")
 
+//Win系统下需要
+#ifdef _WIN64
+#include <Windows.h>
+#endif
 
 #ifdef CUDNN
 #ifndef USE_CMAKE_LIBS
@@ -64,6 +68,10 @@ void check_error(cudaError_t status)
         char buffer[256];
         printf("\n CUDA Error: %s  %s  %d \n", s, __FILE__, __LINE__);
         snprintf(buffer, 256, "CUDA Error: %s", s);
+#ifdef TRAFFIC_SYSTEM_USE
+        sprintf(buffer, "cuda错误 : %s", s);
+        MessageBoxA(NULL, buffer, NULL, MB_ICONHAND | MB_OK);
+#endif
 #ifdef WIN32
         getchar();
 #endif
@@ -75,6 +83,10 @@ void check_error(cudaError_t status)
         char buffer[256];
         printf("\n CUDA Error Prev: %s %s  %d\n", s, __FILE__, __LINE__);
         snprintf(buffer, 256, "CUDA Error Prev: %s", s);
+#ifdef TRAFFIC_SYSTEM_USE
+        sprintf(buffer, "cuda上一个错误 : %s", s);
+        MessageBoxA(NULL, buffer, NULL, MB_ICONHAND | MB_OK);
+#endif
 #ifdef WIN32
         getchar();
 #endif
@@ -192,6 +204,10 @@ void cudnn_check_error(cudnnStatus_t status)
         char buffer[256];
         printf("\n cuDNN Error: %s\n", s);
         snprintf(buffer, 256, "cuDNN Error: %s", s);
+#ifdef TRAFFIC_SYSTEM_USE
+        snprintf(buffer, 256, "cudnn错误 : %s", s);
+        MessageBoxA(NULL, buffer, NULL, MB_ICONHAND | MB_OK);
+#endif
 #ifdef WIN32
         getchar();
 #endif
@@ -203,6 +219,10 @@ void cudnn_check_error(cudnnStatus_t status)
         char buffer[256];
         printf("\n cuDNN Error Prev: %s\n", s);
         snprintf(buffer, 256, "cuDNN Error Prev: %s", s);
+#ifdef TRAFFIC_SYSTEM_USE
+        snprintf(buffer, 256, "cudnn上一个错误 : %s", s);
+        MessageBoxA(NULL, buffer, NULL, MB_ICONHAND | MB_OK);
+#endif
 #ifdef WIN32
         getchar();
 #endif

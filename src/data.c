@@ -590,7 +590,7 @@ void fill_hierarchy(float *truth, int k, tree *hierarchy)
 
 matrix load_labels_paths(char **paths, int n, char **labels, int k, tree *hierarchy, float label_smooth_eps)
 {
-    matrix y = make_matrix(n, k);
+    matrix y = make_matrix(n, k);//k是类别数
     int i;
     for(i = 0; i < n && labels; ++i){
         fill_truth_smooth(paths[i], labels, k, y.vals[i], label_smooth_eps);
@@ -1896,7 +1896,7 @@ data load_all_cifar10()
     {
         //读取cifar文件
         char buff[256];
-        sprintf(buff, "data/cifar/cifar-10-batches-bin/data_batch_%d.bin", b+1);
+        sprintf(buff, "E:/cifar10/data_batch_%d.bin", b+1);
         FILE *fp = fopen(buff, "rb");
         if(!fp) file_error(buff);
 

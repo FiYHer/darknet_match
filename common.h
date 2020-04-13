@@ -1,5 +1,11 @@
 #pragma once
 
+//交通系统标志
+#ifndef TRAFFIC_SYSTEM_USE
+#define TRAFFIC_SYSTEM_USE
+#endif
+
+//C++文件支持
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -7,15 +13,18 @@
 #include <queue>
 #include <map>
 
+//Window文件支持
 #include <windows.h>
 #include <process.h>
 #include <stdio.h>
 #include <time.h>
-
-#include <d3d9.h>
 #include <corecrt_io.h>
+
+//d3d文件支持
+#include <d3d9.h>
 #pragma comment(lib,"d3d9.lib")
 
+//darknet文件支持
 #include "list.h"
 #include "utils.h"
 #include "data.h"
@@ -25,10 +34,12 @@
 #include "image.h"
 #include "image_opencv.h"
 
+//imgui文件支持
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_win32.h"
 #include "imgui/imgui_impl_dx9.h"
 
+//opencv文件支持
 #include <opencv2/opencv.hpp>
 
 //默认字符串大小
@@ -401,7 +412,7 @@ struct global_set
 extern global_set g_global_set;
 
 //严重错误检查
-void check_serious_error(bool state, const char* show_str = "");
+void check_serious_error(bool state, const char* show_str = "", const char* file_pos = __FILE__, int line_pos = __LINE__);
 
 //显示窗口提示
 void show_window_tip(const char* str);

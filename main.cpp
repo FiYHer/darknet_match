@@ -1,13 +1,11 @@
 #include "main.h"
 
 global_set g_global_set;
-//
+
 //int main(int argc, char* argv[])
 //{
-//	//设置显示工作
-//	int gpu_index;
-//	cudaGetDeviceCount(&gpu_index);
-//	cuda_set_device(gpu_index - 1);
+//	//设置显卡工作
+//	cuda_set_device(cuda_get_device());
 //	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
 //
 //	std::map<std::string, int> class_names;
@@ -22,6 +20,7 @@ global_set g_global_set;
 //
 //	std::vector<std::string> buffer
 //	{
+//		"E:\\PascalVoc\\VOC2012\\JPEGImages"
 //	};
 //
 //	for (auto& it : buffer) picture_to_label(it.c_str(), class_names);
@@ -30,26 +29,31 @@ global_set g_global_set;
 //	return 0;
 //}
 
-int main(int argc,char* argv[])
+int main(int argc, char* argv[])//cmd窗口测试作用
 ////int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
-	register_window_struct();
-	create_window();
-	initialize_d3d9();
-	initialize_imgui();
-	window_message_handle();
-	clear_imgui_set();
-	clear_d3d9_set();
+	//设置工作显卡和工作模式
+	cuda_set_device(cuda_get_device());
+	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+
+	register_window_struct();//注册窗口类
+	create_window();//创建窗口
+	initialize_d3d9();//初始化d3d设备
+	initialize_imgui();//初始化imgui界面库
+	window_message_handle();//窗口消息处理
+	clear_imgui_set();//清理imgui界面库
+	clear_d3d9_set();//清理d3d设备
 	return 0;
 }
 
+//声明默认的imgui界面库窗口过程
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT _stdcall window_process(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-	if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
-		return true;
+	//imgui界面库处理了的消息我们不做处理
+	if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam)) return true;
 
-	//窗口大小改变导致设备丢失
+	//窗口大小改变会导致设备丢失，所以我们获取窗口大新大小后要重置d3d设备对象
 	if (msg == WM_SIZE && wparam != SIZE_MINIMIZED)
 	{
 		g_global_set.d3dpresent.BackBufferWidth = LOWORD(lparam);
@@ -58,17 +62,22 @@ LRESULT _stdcall window_process(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpara
 		return true;
 	}
 
-	//退出程序
+	//退出程序消息
 	if (msg == WM_DESTROY) PostQuitMessage(0);
 
+	//上面没人处理就默认处理
 	return DefWindowProcA(hwnd, msg, wparam, lparam);
 }
 
 void register_window_struct()
 {
+	//初始化一个随机种子
 	srand((unsigned int)time(0));
+
+	//设置窗口的标题
 	sprintf(g_global_set.window_class_name, "基于计算机视觉的交通场景智能应用__%d", rand());
 
+	//初始化窗口类
 	WNDCLASSEXA window_class{
 		sizeof(WNDCLASSEXA),
 		CS_CLASSDC,
@@ -82,24 +91,30 @@ void register_window_struct()
 		NULL,
 		g_global_set.window_class_name,
 	};
+
+	//注册窗口类
 	check_serious_error(RegisterClassExA(&window_class), "注册窗口类失败");
 }
 
 void create_window()
 {
+	//尝试创建窗口
 	g_global_set.window_hwnd = CreateWindowExA(NULL, g_global_set.window_class_name, g_global_set.window_class_name,
 		WS_OVERLAPPEDWINDOW, 100, 100, 1000, 600, NULL, NULL, GetModuleHandleA(NULL), NULL);
 	check_serious_error(g_global_set.window_hwnd, "创建窗口失败");
 
+	//将创建好的窗口进行显示
 	ShowWindow(g_global_set.window_hwnd, SW_SHOWMAXIMIZED);
 	UpdateWindow(g_global_set.window_hwnd);
 }
 
 void initialize_d3d9()
 {
+	//获取d3d指针
 	g_global_set.direct3d9 = Direct3DCreate9(D3D_SDK_VERSION);
 	check_serious_error(g_global_set.direct3d9, "初始化d3d9失败");
 
+	//获取d3d9设备指针
 	ZeroMemory(&g_global_set.d3dpresent, sizeof(g_global_set.d3dpresent));
 	g_global_set.d3dpresent.Windowed = TRUE;
 	g_global_set.d3dpresent.SwapEffect = D3DSWAPEFFECT_DISCARD;
@@ -113,16 +128,22 @@ void initialize_d3d9()
 
 void initialize_imgui()
 {
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
+	IMGUI_CHECKVERSION();//检测imgui界面库版本
+	ImGui::CreateContext();//创建一个界面上下文
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+	//不保存任何配置文件
 	io.IniFilename = NULL;
 	io.LogFilename = NULL;
 
+	//设置界面风格为白色
 	ImGui::StyleColorsLight();
+
+	//绑定操作
 	ImGui_ImplWin32_Init(g_global_set.window_hwnd);
 	ImGui_ImplDX9_Init(g_global_set.direct3ddevice9);
 
+	//加载微软雅黑字体，为了支持中文的显示
 	const char* font_path = "msyh.ttc";
 	check_serious_error(_access(font_path, 0) != -1, "微软字体字体文件缺失");
 	io.Fonts->AddFontFromFileTTF(font_path, 20.0f, NULL, io.Fonts->GetGlyphRangesChineseFull());
@@ -130,6 +151,7 @@ void initialize_imgui()
 
 void window_message_handle()
 {
+	//不断获取窗口消息，没有窗口消息就进行界面的绘制操作
 	MSG msg{ 0 };
 	while (msg.message != WM_QUIT)
 	{
@@ -174,6 +196,7 @@ void picture_to_texture()
 
 void clear_picture_texture()
 {
+	//存在纹理就释放
 	if (g_global_set.direct3dtexture9) g_global_set.direct3dtexture9->Release();
 	g_global_set.direct3dtexture9 = nullptr;
 }
@@ -631,5 +654,7 @@ void clear_d3d9_set()
 {
 	if (g_global_set.direct3d9) g_global_set.direct3d9->Release();
 	if (g_global_set.direct3ddevice9) g_global_set.direct3ddevice9->Release();
+	g_global_set.direct3d9 = nullptr;
+	g_global_set.direct3ddevice9 = nullptr;
 }
 

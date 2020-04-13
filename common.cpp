@@ -1,23 +1,24 @@
 #include "common.h"
 
-void check_serious_error(bool state, const char* show_str /*= ""*/)
+void check_serious_error(bool state, const char* show_str, const char* file_pos, int line_pos)
 {
 	if (!state)
 	{
-		char buffer[1024];
-		sprintf(buffer, "发生严重错误!\t 错误提示:%s\t 文件:%s\t 行数:%d\t \n", show_str, __FILE__, __LINE__);
-		MessageBoxA(NULL, buffer, NULL, NULL);
+		char buffer[default_char_size];
+		sprintf(buffer, "发生严重错误!\t 错误提示:%s\t 文件:%s\t 行数:%d\n", show_str, file_pos, line_pos);
+		MessageBoxA(NULL, buffer, NULL, MB_ICONHAND | MB_OK);
 		exit(-1);
 	}
 }
 
 void show_window_tip(const char* str)
 {
-	MessageBoxA(NULL, str, NULL, NULL);
+	MessageBoxA(NULL, str, "警告", MB_ICONWARNING | MB_OK);
 }
 
 int get_gpu_count()
 {
+	//当前为GPU版本的，如果没有显卡支持将无法进行计算
 	int gpu_count = 0;
 	check_serious_error(cudaGetDeviceCount(&gpu_count) == cudaSuccess, "获取显卡数量失败");
 	check_serious_error(gpu_count, "没有发现电脑显卡");
@@ -41,9 +42,9 @@ int get_os_type()
 	{
 		DWORD nativeMajor = 0, nativeMinor = 0, dwBuildNumber = 0;
 		func(&nativeMajor, &nativeMinor, &dwBuildNumber);
-		if (nativeMajor == 6 && nativeMinor == 1) return 7;
-		if (nativeMajor == 6 && nativeMinor == 3) return 8;
-		if (nativeMajor == 10) return 10;
+		if (nativeMajor == 6 && nativeMinor == 1) return 7;//Win7
+		if (nativeMajor == 6 && nativeMinor == 3) return 8;//Win8
+		if (nativeMajor == 10) return 10;//Win10
 	}
 	return -1;
 }
@@ -64,7 +65,7 @@ int get_physical_memory()
 
 bool select_type_file(const char* type_file, char* return_str,int return_str_size)
 {
-	OPENFILENAMEA open_file{0};
+	OPENFILENAMEA open_file{ 0 };
 	open_file.lStructSize = sizeof(open_file);
 	open_file.hwndOwner = NULL;
 	open_file.lpstrFilter = type_file;
@@ -102,6 +103,7 @@ void read_classes_name(std::vector<std::string>& return_data, const char* path)
 
 bool initialize_object_detect_net(const char* names_file, const char* cfg_file, const char* weights_file)
 {
+	//防止二次初始化
 	if (g_global_set.object_detect_net_set.initizlie)
 	{
 		show_window_tip("物体检测网络不需要再次初始化");
@@ -129,10 +131,6 @@ bool initialize_object_detect_net(const char* names_file, const char* cfg_file, 
 		return false;
 	}
 
-	//设置显卡工作
-	cuda_set_device(cuda_get_device());
-	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
-
 	//读取标签数据
 	int classes_number;
 	g_global_set.object_detect_net_set.classes_name = get_labels_custom((char*)names_file, &classes_number);
@@ -156,6 +154,8 @@ bool initialize_object_detect_net(const char* names_file, const char* cfg_file, 
 		clear_object_detect_net();
 		return false;
 	}
+
+	//保存类别数量
 	g_global_set.object_detect_net_set.classes = classes_number;
 
 	//设置状态
@@ -1245,7 +1245,7 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 			int useful_count = 0;
 
 			//写入位置
-			std::fstream file(file_name, std::fstream::out | std::fstream::trunc);
+			std::fstream file(file_name, std::fstream::out | std::fstream::trunc);//注意修改这里
 			if (file.is_open())
 			{
 				//对每一个对象
@@ -1264,7 +1264,7 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 
 							//写入信息
 							char format[1024];
-							sprintf(format, "%d %f %f %f %f\n", it.second, b.x, b.y, b.w, b.h);
+							sprintf(format, "%d %f %f %f %f\n", it.second, b.x, b.y, b.w, b.h);//注意修改这里
 							file.write(format, strlen(format));
 
 							//计数
@@ -1281,7 +1281,7 @@ void picture_to_label(const char* path, std::map<std::string, int>& class_names)
 			file.close();
 
 			//没有对象就删除txt文件
-			if (useful_count == 0) DeleteFileA(file_name.c_str());
+			if (useful_count == 0) DeleteFileA(file_name.c_str());//记住修改这里
 		}
 
 		//释放内存
