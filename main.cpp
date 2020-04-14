@@ -212,7 +212,7 @@ void imgui_show_handle()
 	ImGui::NewFrame();
 
 	//开始渲染一系列窗口
-	//ImGui::ShowDemoWindow();
+	ImGui::ShowDemoWindow();
 	imgui_show_manager();
 	imgui_object_detect_window();
 	imgui_car_id_identify_window();
@@ -454,43 +454,112 @@ void imgui_test_video_window()
 		if (ImGui::Button(u8"选择视频", ImVec2(-FLT_MIN, 0.0f))) select_type_file("video file\0*.mp4;*.avi;*.flv;*.ts\0\0", control_info.video_path);
 	}
 
-	const ImVec2 size = ImGui::GetContentRegionAvail();
+	//获取可显示区域大小
+	const ImVec2 region_size = ImGui::GetContentRegionAvail();
 
-	if (ImGui::Button(u8"标记区域", ImVec2(size.x / 3, 0.0f))) g_global_set.imgui_show_set.show_set_load_region_window = true;
+	if (ImGui::Button(u8"标记区域", ImVec2(region_size.x / 3, 0.0f))) g_global_set.imgui_show_set.show_set_load_region_window = true;
 	ImGui::SameLine();
-	if (ImGui::Button(u8"开始检测", ImVec2(size.x / 3, 0.0f)))
+	if (ImGui::Button(u8"开始检测", ImVec2(region_size.x / 3, 0.0f)))
 	{
 		if (!control_info.leave) show_window_tip("请先停止上一个视频的检测");
 		else if (g_global_set.object_detect_net_set.initizlie) _beginthreadex(NULL, 0, analyse_video, &control_info, 0, NULL);
 		else show_window_tip("网络没有初始化");
 	}
 	ImGui::SameLine();
-	if (ImGui::Button(u8"停止检测", ImVec2(size.x / 3, 0.0f))) control_info.leave = true;
-
-	ImGui::Columns(2, NULL, TRUE);
-	ImGui::Separator();
-	ImGui::BulletText(u8"总人流量 : %d ", g_global_set.secne_set.human_count);
-	ImGui::BulletText(u8"当前人流量 : %d ", g_global_set.secne_set.human_current);
-	ImGui::BulletText(u8"平均人流量 : %d ", g_global_set.secne_set.human_avg);
-	if (ImGui::Button(u8"全部重置", ImVec2(-FLT_MIN, 0.0f)))
+	if (ImGui::Button(u8"停止检测", ImVec2(region_size.x / 3, 0.0f))) control_info.leave = true;
+	
+	if (g_global_set.secne_set.human_traffic)
 	{
-		g_global_set.secne_set.human_count = 0;
-		g_global_set.secne_set.human_current = 0;
-		g_global_set.secne_set.human_avg = 0;
-	}
-	ImGui::NextColumn();
+		ImGui::Separator();
 
-	ImGui::BulletText(u8"总车流量 : %d ", g_global_set.secne_set.car_count);
-	ImGui::BulletText(u8"当前车流量 : %d ", g_global_set.secne_set.car_current);
-	ImGui::BulletText(u8"平均车流量 : %d ", g_global_set.secne_set.car_avg);
-	if (ImGui::Button(u8"全部重置", ImVec2(-FLT_MIN, 0.0f)))
-	{
-		g_global_set.secne_set.car_count = 0;
-		g_global_set.secne_set.car_current = 0;
-		g_global_set.secne_set.car_avg = 0;
+		//防止0
+		int tick_size = g_global_set.secne_set.human_num.size();
+		if (!tick_size) tick_size = 1;
+
+		//申请内存
+		float *temp = new float[tick_size];
+		memset(temp, 0, tick_size * sizeof(float));
+
+		int total_val = 0;
+		static int max_val = 0;
+		for (int i = 0; i < g_global_set.secne_set.human_num.size(); i++)
+		{
+			temp[i] = g_global_set.secne_set.human_num[i];
+			total_val += temp[i];//计算总数
+			if (max_val < temp[i]) max_val = temp[i];//保存最大的
+		}
+
+		//计算平均人流量
+		g_global_set.secne_set.human_avg = total_val / tick_size;
+
+		ImGui::BulletText(u8"总人流量 : %d ", g_global_set.secne_set.human_count); ImGui::SameLine();
+		ImGui::BulletText(u8"当前人流量 : %d ", g_global_set.secne_set.human_current); ImGui::SameLine();
+		ImGui::BulletText(u8"平均人流量 : %d ", g_global_set.secne_set.human_avg);
+
+		//绘制曲线图
+		ImGui::PlotHistogram(u8"每分钟人数", temp, tick_size, 0, NULL, 0.0f, (float)max_val, ImVec2(region_size.x, 50.0f));
+		
+		//释放内存
+		delete[] temp;
+
+		//重置
+		if (ImGui::Button(u8"重置人流量", ImVec2(-FLT_MIN, 0.0f)))
+		{
+			g_global_set.secne_set.human_count = 0;
+			g_global_set.secne_set.human_current = 0;
+			g_global_set.secne_set.human_avg = 0;
+			g_global_set.secne_set.human_minute = 0;
+			g_global_set.secne_set.human_num.clear();
+
+			max_val = 0;
+		}
 	}
-	ImGui::Columns(1);
-	ImGui::Separator();
+
+	if (g_global_set.secne_set.car_traffic)
+	{
+		ImGui::Separator();
+		
+		//获取数量
+		int tick_size = g_global_set.secne_set.car_num.size();
+		if (!tick_size) tick_size = 1;
+		
+		//申请内存
+		float *temp = new float[tick_size];
+		memset(temp, 0, tick_size * sizeof(float));
+
+		int tatol_val = 0;
+		static int max_val = 0;
+		for (int i = 0; i < g_global_set.secne_set.car_num.size(); i++)
+		{
+			temp[i] = g_global_set.secne_set.car_num[i];
+			if (max_val < temp[i]) max_val = temp[i];
+			tatol_val += temp[i];
+		}
+
+		//计算平均值
+		g_global_set.secne_set.car_avg = tatol_val / tick_size;
+
+		ImGui::BulletText(u8"总车流量 : %d ", g_global_set.secne_set.car_count); ImGui::SameLine();
+		ImGui::BulletText(u8"当前车流量 : %d ", g_global_set.secne_set.car_current); ImGui::SameLine();
+		ImGui::BulletText(u8"平均车流量 : %d ", g_global_set.secne_set.car_avg);
+
+		//绘制曲线图
+		ImGui::PlotHistogram(u8"每分钟人数", temp, tick_size, 0, NULL, 0.0f, (float)max_val, ImVec2(region_size.x, 50.0f));
+
+		//释放内存
+		delete temp;
+
+		if (ImGui::Button(u8"重置车流量", ImVec2(-FLT_MIN, 0.0f)))
+		{
+			g_global_set.secne_set.car_count = 0;
+			g_global_set.secne_set.car_current = 0;
+			g_global_set.secne_set.car_avg = 0;
+			g_global_set.secne_set.car_minute = 0;
+			g_global_set.secne_set.car_num.clear();
+
+			max_val = 0;
+		}
+	}
 
 	if (g_global_set.secne_set.occupy_bus_lane && g_global_set.secne_set.occupy_bus_list.size())
 	{

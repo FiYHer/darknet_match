@@ -165,8 +165,9 @@ bool initialize_object_detect_net(const char* names_file, const char* cfg_file, 
 	return true;
 }
 
-bool initialize_car_id_identify_net(const char* names_file, const char* cfg_file, const char* weights_file, int top /*= 1*/)
+bool initialize_car_id_identify_net(const char* names_file, const char* cfg_file, const char* weights_file)
 {
+	//防止二次初始化
 	if (g_global_set.car_id_identify_net.initizlie)
 	{
 		show_window_tip("车牌识别网络不需要再次初始化");
@@ -335,7 +336,7 @@ void analyse_picture(const char* target, set_detect_info& detect_info, bool show
 		{
 			//分析车牌
 			int car_id[7];
-			detect_info.identify_time = analyse_car_id(opencv_data, detector_data[i].det.bbox, car_id);
+			detect_info.identify_time = analyse_car_id(rgb_data, detector_data[i].det.bbox, car_id);
 
 			char temp[default_char_size];
 			sprintf(temp, "  %d%d-%d%d%d%d%d", car_id[0], car_id[1], car_id[2], car_id[3], car_id[4], car_id[5], car_id[6]);
@@ -384,6 +385,10 @@ double analyse_car_id(cv::Mat& picture_data, box box_info, int* car_id_info)
 	//类别数量
 	int outputs = g_global_set.car_id_identify_net.this_net.outputs;
 
+	//大小 
+	int width = g_global_set.car_id_identify_net.this_net.w;
+	int height = g_global_set.car_id_identify_net.this_net.h;
+
 	//车牌有7位数
 	for (int i = 0; i < 7; i++)
 	{
@@ -391,10 +396,10 @@ double analyse_car_id(cv::Mat& picture_data, box box_info, int* car_id_info)
 		cv::Mat data = get_car_id_data_from_index(roi, i);
 
 		//转化
-		image temp, resized, r;
+		image temp;
 		mat_translate_image(data, temp);
-		resized = resize_min(temp, g_global_set.car_id_identify_net.this_net.w);
-		r = crop_image(resized, (resized.w - g_global_set.car_id_identify_net.this_net.w) / 2, (resized.h - g_global_set.car_id_identify_net.this_net.h) / 2, g_global_set.car_id_identify_net.this_net.w, g_global_set.car_id_identify_net.this_net.h);
+		image resized = resize_min(temp, width);
+		image r = crop_image(resized, (resized.w - width) / 2, (resized.h - height) / 2, width, height);
 		
 		//获取开始时间
 		double this_time = get_time_point();
@@ -402,15 +407,13 @@ double analyse_car_id(cv::Mat& picture_data, box box_info, int* car_id_info)
 		//预测
 		float *predictions = network_predict(g_global_set.car_id_identify_net.this_net, r.data);
 
-		//总时间
+		//加入总时间
 		all_time += ((double)get_time_point() - this_time) / 1000.0f;
 
 		//获取概率最高的
 		get_max_car_id(predictions, outputs, car_id_info[i]);
 
 		//释放内存
-		data.release();
-
 		if (r.data != temp.data) free_image(r);
 		free_image(temp);
 		free_image(resized);
@@ -427,25 +430,24 @@ void check_car_id_rect(cv::Mat roi)
 
 cv::Mat get_car_id_data_from_index(cv::Mat& data, int index)
 {
+	//获取图像的大小
 	int width = data.cols;
 	int height = data.rows;
-	cv::Mat roi, buffer;
-	if (index <= 1)
+
+	if (index <= 1)//车牌前面的两个字符
 	{
 		width = width / 9 * 3;
 		int per = width / 2;
-		roi = data({ index * per,0,per,height });
+		return data({ index * per,0,per,height });
 	}
-	else
+	else//车牌后面的五个字符
 	{
 		index -= 2;
 		int start = width / 9 * 3;
 		int length = width - start;
 		int per = length / 5;
-		roi = data({ start + (index * per),0,per,height });
+		return data({ start + (index * per),0,per,height });
 	}
-	cv::cvtColor(roi, buffer, cv::COLOR_RGB2BGR);
-	return buffer;
 }
 
 void get_max_car_id(float* predictions, int count, int& index, float* confid)
@@ -886,6 +888,8 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 						//绘制
 						sprintf(temp, "%s %d",names[j],(int)(detect_data[i].prob[j] * 100.0f));
 						draw_boxs_and_classes(video_ptr->original_frame, detect_data[i].bbox, temp);
+
+						//
 						break;
 					}
 				}
@@ -927,6 +931,7 @@ unsigned __stdcall scene_event_proc(void* prt)
 	//获取类数量
 	int classes = g_global_set.object_detect_net_set.classes;
 
+	//大小
 	int width, height;
 
 	//检测线程没退出才能工作，退出了的话我们也要跟着退出
@@ -952,16 +957,27 @@ unsigned __stdcall scene_event_proc(void* prt)
 					if (video_info->scene_datas[i].data[j].prob[p] > thresh)
 					{
 						/*每一个类型都不同处理
-						car_id,car,person,motorbike,bicycle,trafficlight,dog,bus
-						*/
+						car_id,car,person,motorbike,bicycle,trafficlight,dog,bus*/
 						box b = video_info->scene_datas[i].data[j].bbox;
 						switch (p)
 						{
-						case 1: //车
+						case object_type_car_id:
+							break;
+						case object_type_car:
 							if (car_traffic || occupy_bus_lane) car.push_back(b);
 							break;
-						case 2: //人
+						case object_type_person:
 							if (human_traffic) human.push_back(b);
+							break;
+						case object_type_motorbike: 
+							break;
+						case object_type_bicycle: 
+							break;
+						case object_type_trafficlight: 
+							break;
+						case object_type_dog: 
+							break;
+						case object_type_bus: 
 							break;
 						}
 
@@ -999,11 +1015,8 @@ void calc_human_traffic(std::vector<box> b, int width, int height)
 	if (++last_tick < g_global_set.fps[0]) return;
 	last_tick = 0;
 
-	//引用人流量
-	unsigned int &human_count = g_global_set.secne_set.human_count;
-	unsigned int &human_current = g_global_set.secne_set.human_current;
-
 	//设置当前人流量
+	unsigned int &human_current = g_global_set.secne_set.human_current;
 	human_current = b.size();
 
 	//上一次有人的位置
@@ -1013,7 +1026,11 @@ void calc_human_traffic(std::vector<box> b, int width, int height)
 	for (auto& it : b) calc_trust_box(it, width, height);
 
 	//每一个人
-	for (auto& it : b) if (!calc_same_rect(last_pos, it)) human_count++;
+	int count = 0;
+	for (auto& it : b) if (!calc_same_rect(last_pos, it)) count++;
+
+	//递增人数
+	g_global_set.secne_set.increate_human(count);
 
 	//保存位置
 	last_pos = std::move(b);
@@ -1027,7 +1044,6 @@ void calc_car_traffic(std::vector<box> b, int width, int height)
 	last_tick = 0;
 
 	//引用车流量
-	unsigned int &car_count = g_global_set.secne_set.car_count;
 	unsigned int &car_current = g_global_set.secne_set.car_current;
 
 	//设置当前车流量
@@ -1040,7 +1056,11 @@ void calc_car_traffic(std::vector<box> b, int width, int height)
 	for (auto& it : b) calc_trust_box(it, width, height);
 
 	//遍历每一辆车
-	for (auto& it : b) if (!calc_same_rect(last_pos, it)) car_count++;
+	int count = 0;
+	for (auto& it : b) if (!calc_same_rect(last_pos, it)) count++;
+
+	//递增车辆
+	g_global_set.secne_set.increate_car(count);
 
 	//保存位置
 	last_pos = std::move(b);

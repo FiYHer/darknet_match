@@ -92,19 +92,87 @@ struct car_info
 //场景相关
 struct scene_info
 {
-	//开始时间
+	//获取当前分钟
+	int get_current_minute()
+	{
+		time_t timep;
+		time(&timep);
+		struct tm *prt = gmtime(&timep);
+		return prt->tm_min;
+	}
+
+	//人数增加
+	void increate_human(int value)
+	{
+		//获取当前是第几分钟
+		int current_minute = get_current_minute();
+
+		//不同分钟
+		if (current_minute != minute)
+		{
+			//保存
+			minute = current_minute;
+
+			//保存上一分钟的人数
+			human_num.push_back(human_minute);
+
+			//只保存十分钟的人数
+			int num_size = human_num.size();
+			if (num_size > 10) human_num.erase(human_num.begin(), human_num.begin() + (num_size - 10));
+
+			//设置当前分钟的人数
+			human_minute = value;
+		}
+		else human_minute += value;//同一分钟直接递增
+
+		//总人数递增
+		human_count += value;
+	}
+
+	//增加车流量
+	void increate_car(int value)
+	{
+		//获取当前分钟
+		int current_minute = get_current_minute();
+
+		//过了一分钟
+		if (current_minute != minute)
+		{
+			//保存
+			minute = current_minute;
+
+			//保存上一分钟车流量
+			car_num.push_back(car_minute);
+
+			//只保存十分钟的车流量
+			int num_size = car_num.size();
+			if (num_size > 10) car_num.erase(car_num.begin(), car_num.begin() + (num_size - 10));
+
+			//保存当前分钟的车数量
+			car_minute = value;
+		}
+		else car_minute += value;
+		car_count += value;
+	}
+
+	//当前处于第几分钟
+	int minute;
 
 	//人流量
 	bool human_traffic;
 	unsigned int human_count;//总人流量
+	unsigned int human_minute;//当前分钟人流量
 	unsigned int human_current;//当前人流量
 	unsigned int human_avg;//平均人流量
+	std::vector<int> human_num;//每分钟人数
 
 	//车流量
 	bool car_traffic;
 	unsigned int car_count;//总车流量
+	unsigned int car_minute;//当前分钟车流量
 	unsigned int car_current;//当前车流量
 	unsigned int car_avg;//平均车流量
+	std::vector<int> car_num;//每分钟车辆数
 
 	//占用公交车道
 	bool occupy_bus_lane;
@@ -439,7 +507,7 @@ void read_classes_name(std::vector<std::string>& return_data, const char* path);
 bool initialize_object_detect_net(const char* names_file, const char* cfg_file, const char* weights_file);
 
 //初始化车牌识别网络
-bool initialize_car_id_identify_net(const char* names_file, const char* cfg_file, const char* weights_file, int top = 1);
+bool initialize_car_id_identify_net(const char* names_file, const char* cfg_file, const char* weights_file);
 
 //清理物体检测网络
 void clear_object_detect_net();
