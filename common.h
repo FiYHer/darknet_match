@@ -156,7 +156,7 @@ struct scene_info
 	}
 
 	//当前处于第几分钟
-	int minute;
+	int minute = get_current_minute();
 
 	//人流量
 	bool human_traffic;
@@ -230,7 +230,7 @@ struct video_control
 	//视频宽度 高度
 	int video_size[2];
 
-	video_control() :leave(true), detect_count(6) 
+	video_control() :leave(true), detect_count(2) 
 	{
 		use_camera = camera_index = 0;
 		show_delay = read_delay = detect_delay = scene_delay = 10;
@@ -446,9 +446,6 @@ struct global_set
 	D3DPRESENT_PARAMETERS d3dpresent;
 	LPDIRECT3DDEVICE9 direct3ddevice9;
 	LPDIRECT3DTEXTURE9 direct3dtexture9;
-
-	//计算fps
-	double fps[2];
 
 	//区域标记相关
 	std::vector<region_mask> mask_list;

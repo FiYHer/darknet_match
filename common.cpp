@@ -221,6 +221,9 @@ bool initialize_car_id_identify_net(const char* names_file, const char* cfg_file
 
 void clear_object_detect_net()
 {
+	//不需要释放
+	if (!g_global_set.object_detect_net_set.initizlie) return;
+
 	//释放标签字符串
 	if (g_global_set.object_detect_net_set.classes_name) free_ptrs((void**)g_global_set.object_detect_net_set.classes_name, g_global_set.object_detect_net_set.classes);
 	
@@ -233,6 +236,9 @@ void clear_object_detect_net()
 
 void clear_car_id_identify_net()
 {
+	//不需要释放
+	if (!g_global_set.car_id_identify_net.initizlie) return;
+
 	//释放字符串
 	if (g_global_set.car_id_identify_net.classes_name) free_ptrs((void**)g_global_set.car_id_identify_net.classes_name, g_global_set.car_id_identify_net.classes);
 
@@ -670,8 +676,7 @@ unsigned __stdcall  analyse_video(void* prt)
 	}
 
 	//计算fps
-	double &fps = g_global_set.fps[0];
-	double &before = g_global_set.fps[1];
+	double fps = 0.0, before = 0.0;
 	char fps_char[default_char_size];
 
 	//循环显示视频帧
@@ -874,23 +879,20 @@ unsigned __stdcall prediction_frame_proc(void* prt)
 			//进行非极大值抑制
 			do_nms_sort(detect_data, box_count, classes, nms);
 
-			//操作
+			//操作每一个方框
 			for (int i = 0; i < box_count; i++)
 			{
+				//临时字符串
 				char temp[default_char_size];
 
 				//每一个类检测
 				for (int j = 0; j < classes; j++)
 				{
-					//大于阈值
 					if (detect_data[i].prob[j] > thresh)
 					{
 						//绘制
-						sprintf(temp, "%s %d",names[j],(int)(detect_data[i].prob[j] * 100.0f));
+						sprintf(temp, "%s %d", names[j], (int)(detect_data[i].prob[j] * 100.0f));
 						draw_boxs_and_classes(video_ptr->original_frame, detect_data[i].bbox, temp);
-
-						//
-						break;
 					}
 				}
 			}
@@ -937,29 +939,33 @@ unsigned __stdcall scene_event_proc(void* prt)
 	//检测线程没退出才能工作，退出了的话我们也要跟着退出
 	while (video_info->detect_frame) 
 	{
-		//bug:可能检测结果不是连续帧的!!!
-		int size = video_info->scene_datas.size();
-		for (int i = 0; i < size; i++)
+		//有数据
+		if (video_info->scene_datas.size())
 		{
+			//拿取一个
+			detect_result detect_data = std::move(video_info->scene_datas[0]);
+			video_info->scene_datas.erase(video_info->scene_datas.begin());
+
+			//获取视频的大小
+			width = detect_data.width;
+			height = detect_data.height;
+
+			//位置保存列表
 			std::vector<box> human;
 			std::vector<box> car;
 
-			//检测每一个方框
-			for (int j = 0; j < video_info->scene_datas[i].count; j++)
+			//每一个方框
+			for (int i = 0; i < detect_data.count; i++)
 			{
-				width = video_info->scene_datas[i].width;
-				height = video_info->scene_datas[i].height;
-
-				//判断是哪一个类
-				for (int p = 0; p < classes; p++)
+				//判断是哪一个类型
+				for (int j = 0; j < classes; j++)
 				{
 					//大于阈值
-					if (video_info->scene_datas[i].data[j].prob[p] > thresh)
+					if (detect_data.data[i].prob[j] > thresh)
 					{
-						/*每一个类型都不同处理
-						car_id,car,person,motorbike,bicycle,trafficlight,dog,bus*/
-						box b = video_info->scene_datas[i].data[j].bbox;
-						switch (p)
+						//获取位置
+						box b = detect_data.data[i].bbox;
+						switch (j)
 						{
 						case object_type_car_id:
 							break;
@@ -969,18 +975,19 @@ unsigned __stdcall scene_event_proc(void* prt)
 						case object_type_person:
 							if (human_traffic) human.push_back(b);
 							break;
-						case object_type_motorbike: 
+						case object_type_motorbike:
 							break;
-						case object_type_bicycle: 
+						case object_type_bicycle:
 							break;
-						case object_type_trafficlight: 
+						case object_type_trafficlight:
 							break;
-						case object_type_dog: 
+						case object_type_dog:
 							break;
-						case object_type_bus: 
+						case object_type_bus:
 							break;
 						}
 
+						//结束循环
 						break;
 					}
 				}
@@ -991,16 +998,10 @@ unsigned __stdcall scene_event_proc(void* prt)
 
 			//统计车流量
 			if (car_traffic) calc_car_traffic(car, width, height);
-		
+
 			//占用公交车道
 			if (occupy_bus_lane) check_occupy_bus_lane(car, width, height);
-
-			//清空内存
-			video_info->scene_datas[i].clear();
 		}
-
-		//删除列表
-		video_info->scene_datas.erase(video_info->scene_datas.begin(), video_info->scene_datas.begin() + size);
 
 		Sleep(*video_info->detect_delay);//暂停
 	}
@@ -1010,38 +1011,31 @@ unsigned __stdcall scene_event_proc(void* prt)
 
 void calc_human_traffic(std::vector<box> b, int width, int height)
 {
-	//1秒检测一次
+	//2秒检测一次
 	static int last_tick = 0;
-	if (++last_tick < g_global_set.fps[0]) return;
-	last_tick = 0;
+	if (++last_tick < 60) return;
+	else last_tick = 0;
 
 	//设置当前人流量
-	unsigned int &human_current = g_global_set.secne_set.human_current;
-	human_current = b.size();
+	g_global_set.secne_set.human_current = b.size();
 
-	//上一次有人的位置
-	static std::vector<box> last_pos;
-
-	//将位置信息全部转化为真实位置
-	for (auto& it : b) calc_trust_box(it, width, height);
-
-	//每一个人
-	int count = 0;
-	for (auto& it : b) if (!calc_same_rect(last_pos, it)) count++;
+	//递增的数量
+	static int last_count = 0;
+	int count = b.size() - last_count;
 
 	//递增人数
-	g_global_set.secne_set.increate_human(count);
+	if (count > 0) g_global_set.secne_set.increate_human(count);
 
-	//保存位置
-	last_pos = std::move(b);
+	//保存人数
+	last_count = b.size();
 }
 
 void calc_car_traffic(std::vector<box> b, int width, int height)
 {
-	//1秒检测一次
+	//2秒检测一次
 	static int last_tick = 0;
-	if (++last_tick < g_global_set.fps[0]) return;
-	last_tick = 0;
+	if (++last_tick < 60) return;
+	else last_tick = 0;
 
 	//引用车流量
 	unsigned int &car_current = g_global_set.secne_set.car_current;
@@ -1119,8 +1113,8 @@ void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 {
 	//1秒检测一次
 	static int last_tick = 0;
-	if (++last_tick < g_global_set.fps[0]) return;
-	last_tick = 0;
+	if (++last_tick < 60) return;
+	else last_tick = 0;
 
 	//上一次车辆位置
 	static std::vector<box> last_pos;

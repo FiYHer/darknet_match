@@ -212,7 +212,7 @@ void imgui_show_handle()
 	ImGui::NewFrame();
 
 	//开始渲染一系列窗口
-	ImGui::ShowDemoWindow();
+	//ImGui::ShowDemoWindow();
 	imgui_show_manager();
 	imgui_object_detect_window();
 	imgui_car_id_identify_window();
