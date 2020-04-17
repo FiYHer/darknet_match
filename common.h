@@ -92,87 +92,130 @@ struct car_info
 //场景相关
 struct scene_info
 {
-	//获取当前分钟
-	int get_current_minute()
+	struct count_info
 	{
-		time_t timep;
-		time(&timep);
-		struct tm *prt = gmtime(&timep);
-		return prt->tm_min;
-	}
+		bool enable = false;					//启用
+		typedef long long lint;
+		lint all_count = 0;						//全部流量
+		lint minute_count = 0;				//每分钟流量
+		lint current_count = 0;				//当前流量
+		lint average_count = 0;			//平均流量
+		static const int max_len = 10;	//流量列表长度
+		std::vector<lint> count_list;	//流量列表
 
-	//人数增加
-	void increate_human(int value)
-	{
-		//获取当前是第几分钟
-		int current_minute = get_current_minute();
+		int current_minute = -1;			//当前分钟
+		int current_threadid = -1;		//当前线程id
 
-		//不同分钟
-		if (current_minute != minute)
-		{
-			//保存
-			minute = current_minute;
-
-			//保存上一分钟的人数
-			human_num.push_back(human_minute);
-
-			//只保存十分钟的人数
-			int num_size = human_num.size();
-			if (num_size > 10) human_num.erase(human_num.begin(), human_num.begin() + (num_size - 10));
-
-			//设置当前分钟的人数
-			human_minute = value;
-		}
-		else human_minute += value;//同一分钟直接递增
-
-		//总人数递增
-		human_count += value;
-	}
-
-	//增加车流量
-	void increate_car(int value)
-	{
 		//获取当前分钟
-		int current_minute = get_current_minute();
-
-		//过了一分钟
-		if (current_minute != minute)
+		int get_current_minute() 
 		{
-			//保存
-			minute = current_minute;
-
-			//保存上一分钟车流量
-			car_num.push_back(car_minute);
-
-			//只保存十分钟的车流量
-			int num_size = car_num.size();
-			if (num_size > 10) car_num.erase(car_num.begin(), car_num.begin() + (num_size - 10));
-
-			//保存当前分钟的车数量
-			car_minute = value;
+			time_t timep;
+			time(&timep);
+			struct tm *prt = gmtime(&timep);
+			return prt->tm_min;
 		}
-		else car_minute += value;
-		car_count += value;
-	}
 
-	//当前处于第几分钟
-	int minute = get_current_minute();
+		//获取当前线程id
+		int get_current_threadid()
+		{
+			return GetCurrentThreadId();
+		}
+
+		//增加流量
+		void add_count(int value) 
+		{
+			//不能小于0
+			if (value < 0) value = 0;
+
+			//不同的线程id代表检测的视频换了
+			if (current_threadid != -1 && current_threadid != get_current_threadid()) clear_count();
+
+			//初始化当前分钟和线程id
+			if (current_minute == -1) current_minute = get_current_minute();
+			if (current_threadid == -1) current_threadid = get_current_threadid();
+
+			//不是相同的一分钟
+			if (current_minute != get_current_minute())
+			{
+				//保存当前分钟
+				current_minute = get_current_minute();
+
+				//保存上一分钟的人流量
+				count_list.push_back(minute_count);
+
+				//设置当前分钟的流量
+				minute_count = value;
+
+				//不能超过指定长度
+				int len = count_list.size();
+				if (len > max_len) count_list.erase(count_list.begin(), count_list.begin() + (len - max_len));
+			}
+			else minute_count += value;//同一分钟就直接相加
+
+			all_count += value;//总流量计算
+		}
+
+		//设置当前流量
+		void set_current_count(int value) 
+		{
+			if (value >= 0) current_count = value;
+		}
+
+		//清空所有流量数据
+		void clear_count()
+		{
+			all_count = 0;
+			minute_count = 0;
+			current_count = 0;
+			average_count = 0;
+			count_list.clear();
+
+			current_minute = -1;
+			current_threadid = -1;
+		}
+
+		//转化为数组
+		float* to_array(int &size)
+		{
+			//最少也只能是1
+			size = count_list.size();
+			if (size <= 0) size = 1;
+
+			//申请内存
+			float* buffer = new float[size];
+			memset(buffer, 0, size * sizeof(float));
+
+			//复制
+			for (int i = 0; i < count_list.size(); i++) buffer[i] = count_list[i];
+
+			return buffer;
+		}
+
+		//获取最多的分钟流量
+		lint get_max_minute_count()
+		{
+			lint max_val = 0;
+			for (const auto& it : count_list) if (it > max_val) max_val = it;
+			return max_val;
+		}
+
+		//计算每分钟流量的平均流量
+		void calc_average_count()
+		{
+			//防止除零错误
+			if (count_list.empty()) return;
+
+			lint value = 0;
+			for (const auto& it : count_list) value += it;
+			average_count = value / count_list.size();
+		}
+	};
 
 	//人流量
-	bool human_traffic;
-	unsigned int human_count;//总人流量
-	unsigned int human_minute;//当前分钟人流量
-	unsigned int human_current;//当前人流量
-	unsigned int human_avg;//平均人流量
-	std::vector<int> human_num;//每分钟人数
+	struct count_info human_count;
 
 	//车流量
-	bool car_traffic;
-	unsigned int car_count;//总车流量
-	unsigned int car_minute;//当前分钟车流量
-	unsigned int car_current;//当前车流量
-	unsigned int car_avg;//平均车流量
-	std::vector<int> car_num;//每分钟车辆数
+	struct count_info car_count;
 
 	//占用公交车道
 	bool occupy_bus_lane;
@@ -186,11 +229,6 @@ struct scene_info
 
 	//斑马线不礼让行人
 	bool not_zebra_cross;
-
-	scene_info()
-	{
-		human_count = car_count = 0;
-	}
 };
 
 //分析相关
@@ -574,10 +612,10 @@ unsigned __stdcall prediction_frame_proc(void* prt);
 unsigned __stdcall scene_event_proc(void* prt);
 
 //统计人流量
-void calc_human_traffic(std::vector<box> b, int width, int height);
+void calc_human_traffic(int value);
 
 //统计车流量
-void calc_car_traffic(std::vector<box> b, int width, int height);
+void calc_car_traffic(int value);
 
 //计算实际位置
 void calc_trust_box(box& b, int width, int height);

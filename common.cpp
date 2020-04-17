@@ -923,8 +923,8 @@ unsigned __stdcall scene_event_proc(void* prt)
 	video_handle_info* video_info = (video_handle_info*)prt;
 
 	//场景设置相关
-	bool &human_traffic = g_global_set.secne_set.human_traffic;
-	bool &car_traffic = g_global_set.secne_set.car_traffic;
+	bool &human_traffic = g_global_set.secne_set.human_count.enable;
+	bool &car_traffic = g_global_set.secne_set.car_count.enable;
 	bool &occupy_bus_lane = g_global_set.secne_set.occupy_bus_lane;
 
 	//阈值
@@ -950,6 +950,10 @@ unsigned __stdcall scene_event_proc(void* prt)
 			width = detect_data.width;
 			height = detect_data.height;
 
+			//保存数量
+			int human_count = 0;
+			int car_count = 0;
+
 			//位置保存列表
 			std::vector<box> human;
 			std::vector<box> car;
@@ -970,10 +974,11 @@ unsigned __stdcall scene_event_proc(void* prt)
 						case object_type_car_id:
 							break;
 						case object_type_car:
-							if (car_traffic || occupy_bus_lane) car.push_back(b);
+							car_count++;
+							if (occupy_bus_lane) car.push_back(b);
 							break;
 						case object_type_person:
-							if (human_traffic) human.push_back(b);
+							human_count++;
 							break;
 						case object_type_motorbike:
 							break;
@@ -994,10 +999,10 @@ unsigned __stdcall scene_event_proc(void* prt)
 			}
 
 			//统计人流量
-			if (human_traffic) calc_human_traffic(human, width, height);
+			if (human_traffic) calc_human_traffic(human_count);
 
 			//统计车流量
-			if (car_traffic) calc_car_traffic(car, width, height);
+			if (car_traffic) calc_car_traffic(car_count);
 
 			//占用公交车道
 			if (occupy_bus_lane) check_occupy_bus_lane(car, width, height);
@@ -1009,55 +1014,44 @@ unsigned __stdcall scene_event_proc(void* prt)
 	return 0;
 }
 
-void calc_human_traffic(std::vector<box> b, int width, int height)
+#define CHECK_TICK(last_tick,value) if(++last_tick < value) return; else last_tick = 0;
+
+void calc_human_traffic(int value)
 {
 	//2秒检测一次
 	static int last_tick = 0;
-	if (++last_tick < 60) return;
-	else last_tick = 0;
+	CHECK_TICK(last_tick, 60);
 
 	//设置当前人流量
-	g_global_set.secne_set.human_current = b.size();
+	g_global_set.secne_set.human_count.set_current_count(value);
 
-	//递增的数量
+	//上一次的人数
 	static int last_count = 0;
-	int count = b.size() - last_count;
 
 	//递增人数
-	if (count > 0) g_global_set.secne_set.increate_human(count);
+	g_global_set.secne_set.human_count.add_count(value - last_count);
 
 	//保存人数
-	last_count = b.size();
+	last_count = value;
 }
 
-void calc_car_traffic(std::vector<box> b, int width, int height)
+void calc_car_traffic(int value)
 {
 	//2秒检测一次
 	static int last_tick = 0;
-	if (++last_tick < 60) return;
-	else last_tick = 0;
-
-	//引用车流量
-	unsigned int &car_current = g_global_set.secne_set.car_current;
+	CHECK_TICK(last_tick, 60);
 
 	//设置当前车流量
-	car_current = b.size();
+	g_global_set.secne_set.car_count.set_current_count(value);
 
-	//上次有车的位置
-	static std::vector<box> last_pos;
+	//上一次的车流量
+	static int last_count = 0;
 
-	//全部转化为真实位置
-	for (auto& it : b) calc_trust_box(it, width, height);
+	//递增车流量
+	g_global_set.secne_set.car_count.add_count(value - last_count);
 
-	//遍历每一辆车
-	int count = 0;
-	for (auto& it : b) if (!calc_same_rect(last_pos, it)) count++;
-
-	//递增车辆
-	g_global_set.secne_set.increate_car(count);
-
-	//保存位置
-	last_pos = std::move(b);
+	//保存当前车流量
+	last_count = value;
 }
 
 void calc_trust_box(box& b, int width, int height)

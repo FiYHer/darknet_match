@@ -29,8 +29,8 @@ global_set g_global_set;
 //	return 0;
 //}
 
-int main(int argc, char* argv[])//cmd窗口测试作用
-////int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+//int main(int argc, char* argv[])//cmd窗口测试作用
+int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
 	//设置工作显卡和工作模式
 	cuda_set_device(cuda_get_device());
@@ -245,7 +245,6 @@ void imgui_show_manager()
 {
 	//设置窗口的大小和位置
 	ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowPos(ImVec2(0, 0));
 	ImGui::Begin(u8"智能交通系统");
 
 	//获取显卡数量
@@ -359,25 +358,28 @@ void imgui_test_picture_window()
 {
 	if (!g_global_set.imgui_show_set.show_test_picture_window) return;
 
-	ImGui::SetNextWindowSize(ImVec2(300, 300), ImGuiCond_FirstUseEver);
-	ImGui::Begin(u8"智能交通系统  -  测试图片窗口", &g_global_set.imgui_show_set.show_test_picture_window);
+	ImGui::SetNextWindowSize(ImVec2(500, 300), ImGuiCond_FirstUseEver);
+	ImGui::Begin(u8"智能交通系统  -  测试图片窗口", &g_global_set.imgui_show_set.show_test_picture_window, ImGuiWindowFlags_MenuBar);
 
 	static set_detect_info detect_info;
 
-	//图片检测控制
-	if (ImGui::CollapsingHeader(u8"设置"))
+	if (ImGui::BeginMenuBar())
 	{
-		ImGui::InputFloat(u8"thresh", &detect_info.thresh, 0.01f, 1.0f, "%.3f");
-		ImGui::InputFloat(u8"hier_thresh", &detect_info.hier_thresh, 0.01f, 1.0f, "%.3f");
-		ImGui::InputFloat(u8"nms", &detect_info.nms, 0.01f, 1.0f, "%.3f");
-	}
-
-	//颜色控制
-	if (ImGui::CollapsingHeader(u8"颜色"))
-	{
-		ImGui::ColorEdit3(u8"方框颜色", g_global_set.color_set.box_rgb);
-		ImGui::ColorEdit3(u8"字体颜色", g_global_set.color_set.font_rgb);
-		ImGui::InputFloat(u8"线条厚度", &g_global_set.color_set.thickness, 0.01f, 1.0f, "%.3f");
+		if (ImGui::BeginMenu(u8"检测设置"))
+		{
+			ImGui::InputFloat(u8"thresh", &detect_info.thresh, 0.01f, 1.0f);
+			ImGui::InputFloat(u8"hier_thresh", &detect_info.hier_thresh, 0.01f, 1.0f);
+			ImGui::InputFloat(u8"nms", &detect_info.nms, 0.01f, 1.0f);
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"方框设置"))
+		{
+			ImGui::ColorEdit3(u8"方框颜色", g_global_set.color_set.box_rgb);
+			ImGui::ColorEdit3(u8"字体颜色", g_global_set.color_set.font_rgb);
+			ImGui::InputFloat(u8"方框厚度", &g_global_set.color_set.thickness, 0.01f, 1.0f);
+			ImGui::EndMenu();
+		}
+		ImGui::EndMenuBar();
 	}
 
 	//获取可用区域大小
@@ -404,43 +406,62 @@ void imgui_test_video_window()
 {
 	if (!g_global_set.imgui_show_set.show_test_video_window) return;
 
-	ImGui::SetNextWindowSize(ImVec2(500, 700), ImGuiCond_FirstUseEver);
-	ImGui::Begin(u8"智能交通系统  -  测试视频窗口", &g_global_set.imgui_show_set.show_test_video_window);
+	ImGui::SetNextWindowSize(ImVec2(700, 700), ImGuiCond_FirstUseEver);
+	ImGui::Begin(u8"智能交通系统  -  测试视频窗口", &g_global_set.imgui_show_set.show_test_video_window, ImGuiWindowFlags_MenuBar);
 
-	//视频控制
-	static video_control control_info;
-	if (ImGui::CollapsingHeader(u8"延迟"))
-	{
-		ImGui::InputInt(u8"显示延迟", &control_info.show_delay);
-		ImGui::InputInt(u8"读取延迟", &control_info.read_delay);
-		ImGui::InputInt(u8"检测延迟", &control_info.detect_delay);
-		ImGui::InputInt(u8"场景延迟", &control_info.scene_delay);
-	}
+	//视频控制结构
+	static struct video_control control_info;
 
-	if (ImGui::CollapsingHeader(u8"检测"))
+	if (ImGui::BeginMenuBar())
 	{
-		ImGui::InputFloat(u8"thresh", &g_global_set.video_detect_set.thresh, 0.1f, 1.0f, "%.2f");
-		ImGui::InputFloat(u8"hier_thresh", &g_global_set.video_detect_set.hier_thresh, 0.1f, 1.0f, "%.2f");
-		ImGui::InputFloat(u8"nms", &g_global_set.video_detect_set.nms, 0.1f, 1.0f, "%.2f");
-		ImGui::InputInt(u8"检测线程", &control_info.detect_count);
-	}
-
-	if (ImGui::CollapsingHeader(u8"场景"))
-	{
-		ImGui::Checkbox(u8"统计人流量", &g_global_set.secne_set.human_traffic);
-		ImGui::Checkbox(u8"统计车流量", &g_global_set.secne_set.car_traffic);
-		ImGui::Checkbox(u8"占用公交车道", &g_global_set.secne_set.occupy_bus_lane);
-		ImGui::Checkbox(u8"闯红灯", &g_global_set.secne_set.rush_red_light);
-		ImGui::Checkbox(u8"不按导向行驶", &g_global_set.secne_set.not_guided);
-		ImGui::Checkbox(u8"斑马线不礼让行人", &g_global_set.secne_set.not_zebra_cross);
-	}
-
-	if (ImGui::CollapsingHeader(u8"设置"))
-	{
-		ImGui::ColorEdit3(u8"方框颜色", g_global_set.color_set.box_rgb);
-		ImGui::ColorEdit3(u8"字体颜色", g_global_set.color_set.font_rgb);
-		ImGui::InputFloat(u8"线条厚度", &g_global_set.color_set.thickness, 0.01f, 1.0f, "%.3f");
-		ImGui::InputInt2(u8"视频大小", control_info.video_size);
+		if (ImGui::BeginMenu(u8"延迟设置"))
+		{
+			ImGui::InputInt(u8"显示延迟", &control_info.show_delay);
+			ImGui::InputInt(u8"读取延迟", &control_info.read_delay);
+			ImGui::InputInt(u8"检测延迟", &control_info.detect_delay);
+			ImGui::InputInt(u8"场景延迟", &control_info.scene_delay);
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"检测设置"))
+		{
+			ImGui::InputFloat(u8"thresh", &g_global_set.video_detect_set.thresh, 0.1f, 1.0f);
+			ImGui::InputFloat(u8"hier_thresh", &g_global_set.video_detect_set.hier_thresh, 0.1f, 1.0f);
+			ImGui::InputFloat(u8"nms", &g_global_set.video_detect_set.nms, 0.1f, 1.0f);
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"线程设置"))
+		{
+			ImGui::InputInt(u8"检测线程", &control_info.detect_count);
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"场景设置"))
+		{
+			ImGui::Checkbox(u8"统计人流量", &g_global_set.secne_set.human_count.enable);
+			ImGui::Checkbox(u8"统计车流量", &g_global_set.secne_set.car_count.enable);
+			ImGui::Checkbox(u8"占用公交车道", &g_global_set.secne_set.occupy_bus_lane);
+			ImGui::Checkbox(u8"闯红灯", &g_global_set.secne_set.rush_red_light);
+			ImGui::Checkbox(u8"不按导向行驶", &g_global_set.secne_set.not_guided);
+			ImGui::Checkbox(u8"斑马线不礼让行人", &g_global_set.secne_set.not_zebra_cross);
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"方框设置"))
+		{
+			ImGui::ColorEdit3(u8"方框颜色", g_global_set.color_set.box_rgb);
+			ImGui::ColorEdit3(u8"字体颜色", g_global_set.color_set.font_rgb);
+			ImGui::InputFloat(u8"线条厚度", &g_global_set.color_set.thickness, 0.01f, 1.0f);
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"大小设置"))
+		{
+			ImGui::InputInt2(u8"视频大小", control_info.video_size);
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu(u8"区域设置"))
+		{
+			if (ImGui::MenuItem(u8"编辑区域")) g_global_set.imgui_show_set.show_set_load_region_window = true;
+			ImGui::EndMenu();
+		}
+		ImGui::EndMenuBar();
 	}
 
 	ImGui::RadioButton(u8"视频模式", &control_info.use_camera, 0);
@@ -450,117 +471,81 @@ void imgui_test_video_window()
 	if (control_info.use_camera) ImGui::InputInt(u8"摄像头索引", &control_info.camera_index);
 	else
 	{
-		ImGui::InputText(u8"视频路径", (char*)string_to_utf8(control_info.video_path).c_str(), default_char_size);
-		if (ImGui::Button(u8"选择视频", ImVec2(-FLT_MIN, 0.0f))) select_type_file("video file\0*.mp4;*.avi;*.flv;*.ts\0\0", control_info.video_path);
+		ImGui::InputText(u8"视频路径", (char*)string_to_utf8(control_info.video_path).c_str(), default_char_size); ImGui::SameLine();
+		if (ImGui::Button(u8"选择视频", ImVec2(-FLT_MIN / 2, 0.0f))) select_type_file("video file\0*.mp4;*.avi;*.flv;*.ts\0\0", control_info.video_path);
 	}
 
 	//获取可显示区域大小
 	const ImVec2 region_size = ImGui::GetContentRegionAvail();
 
-	if (ImGui::Button(u8"标记区域", ImVec2(region_size.x / 3, 0.0f))) g_global_set.imgui_show_set.show_set_load_region_window = true;
-	ImGui::SameLine();
-	if (ImGui::Button(u8"开始检测", ImVec2(region_size.x / 3, 0.0f)))
+	if (ImGui::Button(u8"开始检测", ImVec2(region_size.x / 2, 0.0f)))
 	{
 		if (!control_info.leave) show_window_tip("请先停止上一个视频的检测");
 		else if (g_global_set.object_detect_net_set.initizlie) _beginthreadex(NULL, 0, analyse_video, &control_info, 0, NULL);
 		else show_window_tip("网络没有初始化");
 	}
 	ImGui::SameLine();
-	if (ImGui::Button(u8"停止检测", ImVec2(region_size.x / 3, 0.0f))) control_info.leave = true;
+	if (ImGui::Button(u8"停止检测", ImVec2(region_size.x / 2, 0.0f))) control_info.leave = true;
 	
-	if (g_global_set.secne_set.human_traffic)
+	//显示人流量
+	if (g_global_set.secne_set.human_count.enable)
 	{
 		ImGui::Separator();
 
-		//防止0
-		int tick_size = g_global_set.secne_set.human_num.size();
-		if (!tick_size) tick_size = 1;
+		//获取数组数据
+		int tick_size;
+		float *buffer = g_global_set.secne_set.human_count.to_array(tick_size);
 
-		//申请内存
-		float *temp = new float[tick_size];
-		memset(temp, 0, tick_size * sizeof(float));
-
-		int total_val = 0;
-		static int max_val = 0;
-		for (int i = 0; i < g_global_set.secne_set.human_num.size(); i++)
-		{
-			temp[i] = g_global_set.secne_set.human_num[i];
-			total_val += temp[i];//计算总数
-			if (max_val < temp[i]) max_val = temp[i];//保存最大的
-		}
+		//获取最多的流量那个
+		int max_val = g_global_set.secne_set.human_count.get_max_minute_count();
 
 		//计算平均人流量
-		g_global_set.secne_set.human_avg = total_val / tick_size;
+		g_global_set.secne_set.human_count.calc_average_count();
 
-		ImGui::BulletText(u8"总人流量 : %d ", g_global_set.secne_set.human_count); ImGui::SameLine();
-		ImGui::BulletText(u8"当前人流量 : %d ", g_global_set.secne_set.human_current); ImGui::SameLine();
-		ImGui::BulletText(u8"平均人流量 : %d ", g_global_set.secne_set.human_avg);
+		ImGui::BulletText(u8"总人流量 : %d ", g_global_set.secne_set.human_count.all_count); ImGui::SameLine();
+		ImGui::BulletText(u8"当前人流量 : %d ", g_global_set.secne_set.human_count.current_count); ImGui::SameLine();
+		ImGui::BulletText(u8"平均人流量 : %d ", g_global_set.secne_set.human_count.average_count);
 
 		//绘制曲线图
-		ImGui::PlotHistogram(u8"每分钟人数", temp, tick_size, 0, NULL, 0.0f, (float)max_val, ImVec2(region_size.x, 50.0f));
+		ImGui::PlotHistogram(u8"每分钟人数", buffer, tick_size, 0, NULL, 0.0f, (float)max_val, ImVec2(region_size.x, 50.0f));
 		
 		//释放内存
-		delete[] temp;
+		delete[] buffer;
 
 		//重置
-		if (ImGui::Button(u8"重置人流量", ImVec2(-FLT_MIN, 0.0f)))
-		{
-			g_global_set.secne_set.human_count = 0;
-			g_global_set.secne_set.human_current = 0;
-			g_global_set.secne_set.human_avg = 0;
-			g_global_set.secne_set.human_minute = 0;
-			g_global_set.secne_set.human_num.clear();
-
-			max_val = 0;
-		}
+		if (ImGui::Button(u8"重置人流量", ImVec2(-FLT_MIN, 0.0f))) g_global_set.secne_set.human_count.clear_count();
 	}
 
-	if (g_global_set.secne_set.car_traffic)
+	//显示车流量
+	if (g_global_set.secne_set.car_count.enable)
 	{
 		ImGui::Separator();
-		
-		//获取数量
-		int tick_size = g_global_set.secne_set.car_num.size();
-		if (!tick_size) tick_size = 1;
-		
-		//申请内存
-		float *temp = new float[tick_size];
-		memset(temp, 0, tick_size * sizeof(float));
 
-		int tatol_val = 0;
-		static int max_val = 0;
-		for (int i = 0; i < g_global_set.secne_set.car_num.size(); i++)
-		{
-			temp[i] = g_global_set.secne_set.car_num[i];
-			if (max_val < temp[i]) max_val = temp[i];
-			tatol_val += temp[i];
-		}
+		//获取数组数据
+		int tick_size;
+		float *buffer = g_global_set.secne_set.car_count.to_array(tick_size);
 
-		//计算平均值
-		g_global_set.secne_set.car_avg = tatol_val / tick_size;
+		//获取最多的流量那个
+		int max_val = g_global_set.secne_set.car_count.get_max_minute_count();
 
-		ImGui::BulletText(u8"总车流量 : %d ", g_global_set.secne_set.car_count); ImGui::SameLine();
-		ImGui::BulletText(u8"当前车流量 : %d ", g_global_set.secne_set.car_current); ImGui::SameLine();
-		ImGui::BulletText(u8"平均车流量 : %d ", g_global_set.secne_set.car_avg);
+		//计算平均人流量
+		g_global_set.secne_set.car_count.calc_average_count();
+
+		ImGui::BulletText(u8"总车流量 : %d ", g_global_set.secne_set.car_count.all_count); ImGui::SameLine();
+		ImGui::BulletText(u8"当前车流量 : %d ", g_global_set.secne_set.car_count.current_count); ImGui::SameLine();
+		ImGui::BulletText(u8"平均车流量 : %d ", g_global_set.secne_set.car_count.average_count);
 
 		//绘制曲线图
-		ImGui::PlotHistogram(u8"每分钟人数", temp, tick_size, 0, NULL, 0.0f, (float)max_val, ImVec2(region_size.x, 50.0f));
+		ImGui::PlotHistogram(u8"每分钟车数", buffer, tick_size, 0, NULL, 0.0f, (float)max_val, ImVec2(region_size.x, 50.0f));
 
 		//释放内存
-		delete temp;
+		delete[] buffer;
 
-		if (ImGui::Button(u8"重置车流量", ImVec2(-FLT_MIN, 0.0f)))
-		{
-			g_global_set.secne_set.car_count = 0;
-			g_global_set.secne_set.car_current = 0;
-			g_global_set.secne_set.car_avg = 0;
-			g_global_set.secne_set.car_minute = 0;
-			g_global_set.secne_set.car_num.clear();
-
-			max_val = 0;
-		}
+		//重置
+		if (ImGui::Button(u8"重置车流量", ImVec2(-FLT_MIN, 0.0f))) g_global_set.secne_set.human_count.clear_count();
 	}
 
+	//显示占用公交车道
 	if (g_global_set.secne_set.occupy_bus_lane && g_global_set.secne_set.occupy_bus_list.size())
 	{
 		//队列只显示5个，多的可以保存道文件里面
@@ -623,24 +608,24 @@ void imgui_load_region_window()
 		static char video_path[default_char_size];
 		if (ImGui::BeginMenu(u8"操作相关"))
 		{
-			if (ImGui::Button(u8"读取一帧视频图像") && select_type_file("video file\0*.mp4;*.avi;*.flv\0\0", video_path, default_char_size))
+			if (ImGui::MenuItem(u8"读取一帧视频图像") && select_type_file("video file\0*.mp4;*.avi;*.flv\0\0", video_path, default_char_size))
 			{
 				read_video_frame(video_path);
 				clear_start_pos();
 			}
-			if (ImGui::Button(u8"标记斑马线的通道"))
+			if (ImGui::MenuItem(u8"标记斑马线的通道"))
 			{
 				colf.w = colf.y = 1.0f; colf.x = colf.z = 0;
 				region_info.type = region_zebra_cross;
 				clear_start_pos();
 			}
-			if (ImGui::Button(u8"标记公交车专用道"))
+			if (ImGui::MenuItem(u8"标记公交车专用道"))
 			{
 				colf.w = colf.z = 1.0f; colf.y = colf.x = 0;
 				region_info.type = region_bus_lane;
 				clear_start_pos();
 			}
-			if (ImGui::Button(u8"标记马路边停车位"))
+			if (ImGui::MenuItem(u8"标记马路边停车位"))
 			{
 				colf.w = colf.x = 1.0f; colf.y = colf.z = 0;
 				region_info.type = region_street_parking;
