@@ -2,35 +2,36 @@
 
 global_set g_global_set;
 
-//int main(int argc, char* argv[])
-//{
-//	//设置显卡工作
-//	cuda_set_device(cuda_get_device());
-//	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
-//
-//	std::map<std::string, int> class_names;
-//	class_names.insert({ "car",1 });
-//	class_names.insert({ "truck" ,1 });
-//	class_names.insert({ "person" ,2 });
-//	class_names.insert({ "motorbike",3 });
-//	class_names.insert({ "bicycle" ,4 });
-//	class_names.insert({ "traffic light",5 });
-//	class_names.insert({ "dog",6 });
-//	class_names.insert({ "bus",7 });
-//
-//	std::vector<std::string> buffer
-//	{
-//		"E:\\PascalVoc\\VOC2012\\JPEGImages"
-//	};
-//
-//	for (auto& it : buffer) picture_to_label(it.c_str(), class_names);
-//	printf("标记完成!------------------------------------------------------");
-//	getchar();
-//	return 0;
-//}
+/*
+int main(int argc, char* argv[])
+{
+	//设置显卡工作
+	cuda_set_device(cuda_get_device());
+	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
 
-//int main(int argc, char* argv[])//cmd窗口测试作用
-int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+	std::map<std::string, int> class_names;
+	class_names.insert({ "license plate",0 });
+	class_names.insert({ "truck" ,1 });
+	class_names.insert({ "car",1 });
+	class_names.insert({ "bus",2 });
+	class_names.insert({ "person" ,3 });
+	class_names.insert({ "traffic light",4 });
+	
+	std::vector<std::string> buffer
+	{
+		"H:\\TestPicture\\car_zol"
+	};
+
+	for (auto& it : buffer) picture_to_label(it.c_str(), class_names);
+	printf("标记完成!------------------------------------------------------");
+	getchar();
+	return 0;
+}
+*/
+
+/*
+int main(int argc, char* argv[])//cmd窗口测试作用
+//int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
 	//设置工作显卡和工作模式
 	cuda_set_device(cuda_get_device());
@@ -45,6 +46,7 @@ int _stdcall WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	clear_d3d9_set();//清理d3d设备
 	return 0;
 }
+*/
 
 //声明默认的imgui界面库窗口过程
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -438,7 +440,7 @@ void imgui_test_video_window()
 		{
 			ImGui::Checkbox(u8"统计人流量", &g_global_set.secne_set.human_count.enable);
 			ImGui::Checkbox(u8"统计车流量", &g_global_set.secne_set.car_count.enable);
-			ImGui::Checkbox(u8"占用公交车道", &g_global_set.secne_set.occupy_bus_lane);
+			ImGui::Checkbox(u8"占用公交车道", &g_global_set.secne_set.bus_datas.enable);
 			ImGui::Checkbox(u8"闯红灯", &g_global_set.secne_set.rush_red_light);
 			ImGui::Checkbox(u8"不按导向行驶", &g_global_set.secne_set.not_guided);
 			ImGui::Checkbox(u8"斑马线不礼让行人", &g_global_set.secne_set.not_zebra_cross);
@@ -546,20 +548,19 @@ void imgui_test_video_window()
 	}
 
 	//显示占用公交车道
-	if (g_global_set.secne_set.occupy_bus_lane && g_global_set.secne_set.occupy_bus_list.size())
+	if (g_global_set.secne_set.bus_datas.enable)
 	{
-		//队列只显示5个，多的可以保存道文件里面
-		int size = g_global_set.secne_set.occupy_bus_list.size();
-		if (size > 5)
-			g_global_set.secne_set.occupy_bus_list.erase(g_global_set.secne_set.occupy_bus_list.begin(),
-				g_global_set.secne_set.occupy_bus_list.begin() + (size - 5));
-
-		//显示
-		for (auto& it : g_global_set.secne_set.occupy_bus_list)
-			ImGui::BulletText(u8"占用公交车道 - %d年%d月%d日%d时%d分%d秒",
-				it.times[0], it.times[1], it.times[2], it.times[3], it.times[4], it.times[5]);
 		ImGui::Separator();
+
+		int max_val;
+		char** str = g_global_set.secne_set.bus_datas.to_string(max_val);
+		if (str)
+		{
+			for (int i = 0; i < max_val; i++) ImGui::BulletText(string_to_utf8(str[i]).c_str());
+			delete[] str;
+		}
 	}
+
 
 	ImGui::End();
 }

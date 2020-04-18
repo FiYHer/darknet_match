@@ -925,7 +925,7 @@ unsigned __stdcall scene_event_proc(void* prt)
 	//场景设置相关
 	bool &human_traffic = g_global_set.secne_set.human_count.enable;
 	bool &car_traffic = g_global_set.secne_set.car_count.enable;
-	bool &occupy_bus_lane = g_global_set.secne_set.occupy_bus_lane;
+	bool &occupy_bus_lane = g_global_set.secne_set.bus_datas.enable;
 
 	//阈值
 	float &thresh = g_global_set.video_detect_set.thresh;
@@ -1020,7 +1020,7 @@ void calc_human_traffic(int value)
 {
 	//2秒检测一次
 	static int last_tick = 0;
-	CHECK_TICK(last_tick, 60);
+	CHECK_TICK(last_tick, 30);
 
 	//设置当前人流量
 	g_global_set.secne_set.human_count.set_current_count(value);
@@ -1105,10 +1105,58 @@ bool calc_same_rect(std::vector<box>& b_list, box& b)
 
 void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 {
-	//1秒检测一次
-	static int last_tick = 0;
-	if (++last_tick < 60) return;
-	else last_tick = 0;
+	//2秒检测一次
+	static int last_tick = 0; 
+	CHECK_TICK(last_tick, 30);
+
+	//与公交车道相交的车辆
+	std::vector<box> regions;
+
+	//遍历区域
+	for (auto& it : g_global_set.mask_list)
+	{
+		//非公交车道
+		if(it.type != region_bus_lane) continue;
+
+		//公交车道区域
+		box bus_region = it.get_box();
+		calc_trust_box(bus_region, width, height);
+
+		//车辆遍历
+		for (auto& ls : b) calc_trust_box(ls, width, height);
+		for (auto& ls : b)	if (calc_intersect(bus_region, ls)) regions.push_back(ls);
+	}
+
+	//上一帧进入的车辆
+	static std::vector<box> last_regions;
+
+	for (const auto& it : regions)
+	{
+		//判断这一辆车上一帧是不是被检测过了
+		bool state = false;
+		for (int i = 0; i < last_regions.size(); i++)
+		{
+			if (calc_intersect(it, last_regions[i]))//相交大于0.5就是被检测过了
+			{
+				last_regions.erase(last_regions.begin() + i);
+				state = true;
+				break;
+			}
+		}
+		if (!state)//没有被检测过
+		{
+			scene_info::occupy_bus_info::bus_data temp;
+
+			//车牌识别....
+
+			g_global_set.secne_set.bus_datas.push_bus_data(temp);
+		}
+	}
+
+	//保存
+	last_regions = std::move(regions);
+
+	/*
 
 	//上一次车辆位置
 	static std::vector<box> last_pos;
@@ -1161,6 +1209,7 @@ void check_occupy_bus_lane(std::vector<box> b, int width, int height)
 		}
 	}
 	last_pos = std::move(b);
+	*/
 }
 
 

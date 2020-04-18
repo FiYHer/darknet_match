@@ -81,14 +81,6 @@ struct color_info
 	color_info() : thickness(1.0f) {}
 };
 
-//车辆信息
-struct car_info
-{
-	int car_id[7];//车辆车牌索引
-
-	int times[6];//时间信息
-};
-
 //场景相关
 struct scene_info
 {
@@ -217,9 +209,61 @@ struct scene_info
 	//车流量
 	struct count_info car_count;
 
-	//占用公交车道
-	bool occupy_bus_lane;
-	std::vector<car_info> occupy_bus_list;//车辆列表
+	struct occupy_bus_info
+	{
+		struct bus_data
+		{
+			int car_id[7];//车辆车牌索引
+			int times[6];//时间信息
+
+			bus_data() { set_time(); }
+			void set_time()
+			{
+				time_t timep;
+				struct tm *p;
+				time(&timep);
+				p = gmtime(&timep);
+				times[0] = 1900 + p->tm_year;//年
+				times[1] = 1 + p->tm_mon;//月
+				times[2] = p->tm_mday;//日
+				times[3] = 8 + p->tm_hour;//时
+				times[4] = p->tm_min;//分
+				times[5] = p->tm_sec;//秒
+			}
+		};
+		bool enable = false;//是否启用
+		static const int max_size = 10;//不能超过
+		std::vector<bus_data> bus_list;//车辆列表
+
+		//保存
+		void push_bus_data(bus_data& value)
+		{
+			bus_list.push_back(std::move(value));
+
+			int size = bus_list.size();
+			if (size > max_size) bus_list.erase(bus_list.begin(), bus_list.begin() + (size - max_size));
+		}
+
+		//转化为字符串显示
+		char** to_string(int& count)
+		{
+			if (bus_list.empty()) return nullptr;
+
+			count = bus_list.size();
+			char** str = new char*[count];
+			for (int i = 0; i < count; i++)
+			{
+				str[i] = new char[default_char_size];
+				sprintf(str[i], "%d年%d月%d日%d时%d分%d秒", bus_list[i].times[0], bus_list[i].times[1],
+					bus_list[i].times[2], bus_list[i].times[3], bus_list[i].times[4], bus_list[i].times[5]);
+			}
+
+			return str;
+		}
+	};
+
+	//占用公交车
+	occupy_bus_info bus_datas;
 
 	//闯红灯
 	bool rush_red_light;
@@ -446,9 +490,9 @@ struct region_mask
 		float w_scale = 1.0f / window_size.x;
 		float h_scale = 1.0f / window_size.y;
 
-		float p_x = pos.x - 8.0f;
+		float p_x = pos.x + 8.0f;
 		float p_y = pos.y - 50.0f;
-		float s_x = size.x - 8.0f;
+		float s_x = size.x + 8.0f;
 		float s_y = size.y - 50.0f;
 
 		float x_center = (p_x+ s_x) / 2.0f - 1.0f;
