@@ -7,7 +7,6 @@
 #include "imgui/imgui_impl_dx9.h"
 #include "imgui/imgui_impl_win32.h"
 
-#include "help.h"
 #include "video.h"
 
 class gui
@@ -64,7 +63,7 @@ private:
 	void imgui_display_video() noexcept;
 
 	//覆盖窗口 视频控制选项
-	void imgui_video_control_overlay() noexcept;
+	void imgui_video_control_overlay(ImVec2 pos, float width) noexcept;
 
 	//窗口主菜单
 	void imgui_window_meun() noexcept;

@@ -4,7 +4,7 @@
 #include "opencv2/opencv.hpp"
 
 #include "struct.h"
-#include "help.h"
+#include "detect.h"
 
 #include <iostream>
 #include <mutex>
@@ -38,6 +38,9 @@ private:
 	//视频播放
 	cv::VideoCapture m_capture;
 
+	//视频播放互斥
+	std::mutex m_capture_mutex;
+
 	//视频帧
 	std::list<frame_handle*> m_frames;
 
@@ -47,12 +50,18 @@ private:
 	//暂停视频播放
 	bool m_pause_video;
 
+	//fps
+	double m_display_fps;
+
 private:
 	//读取视频帧线程
 	static void __cdecl read_frame_thread(void* data);
 
 	//检测视频帧线程
 	static void __cdecl detect_frame_thread(void* data);
+
+	//更新FPS
+	void update_fps() noexcept;
 
 public:
 	bool get_is_reading() const noexcept;
@@ -68,10 +77,15 @@ public:
 	cv::VideoCapture* get_capture() noexcept;
 	std::list<frame_handle*>* get_frames() noexcept;
 
-	void entry_mutex() noexcept;
-	void leave_mutex() noexcept;
+	void entry_capture_mutex() noexcept;
+	void leave_capture_mutex() noexcept;
+
+	void entry_frame_mutex() noexcept;
+	void leave_frame_mutex() noexcept;
 
 	bool get_pause_state() const noexcept;
+
+	double get_display_fps() const noexcept;
 
 public:
 	//设置视频路径
@@ -84,7 +98,8 @@ public:
 	struct frame_handle* get_video_frame() noexcept;
 
 	//设置视频帧
-	void set_frame_index() noexcept;
+	void set_frame_index(int index) noexcept;
+	void set_frame_index(float rate) noexcept;
 
 	//获取视频播放比率
 	float get_finish_rate() noexcept;
@@ -94,7 +109,7 @@ public:
 	~video();
 
 	//开始播放视频
-	void start() noexcept;
+	bool start() noexcept;
 	
 	//暂停播放视频
 	void pause() noexcept;

@@ -32,16 +32,20 @@ void __cdecl video::read_frame_thread(void* data)
 		{
 			struct frame_handle* temp = new frame_handle;
 			temp->state = e_un_handle;
+
+			m_static_this->entry_capture_mutex();
 			bool state = capture->read(temp->frame);
+			m_static_this->leave_capture_mutex();
+
 			if (state == false)
 			{
 				delete temp;
 				break;
 			}
 
-			m_static_this->entry_mutex();
+			m_static_this->entry_frame_mutex();
 			frames_list->push_back(temp);
-			m_static_this->leave_mutex();
+			m_static_this->leave_frame_mutex();
 
 		}
 
@@ -71,7 +75,7 @@ void __cdecl video::detect_frame_thread(void* data)
 
 		struct frame_handle* temp = nullptr;
 
-		m_static_this->entry_mutex();
+		m_static_this->entry_frame_mutex();
 		for (auto& it = frames_list->begin(); it != frames_list->end(); it++)
 		{
 			if ((*it)->state == e_un_handle)
@@ -81,7 +85,7 @@ void __cdecl video::detect_frame_thread(void* data)
 				break;
 			}
 		}
-		m_static_this->leave_mutex();
+		m_static_this->leave_frame_mutex();
 
 		if (temp)
 		{
@@ -94,6 +98,16 @@ void __cdecl video::detect_frame_thread(void* data)
 	}
 
 	m_static_this->set_detecting(false);
+}
+
+void video::update_fps() noexcept
+{
+	static double before = 0;
+
+	double after = get_time_point();
+	double current = 1000000.0 / (after - before);
+	m_display_fps = m_display_fps * 0.9 + current * 0.1;
+	before = after;
 }
 
 bool video::get_is_reading() const noexcept
@@ -141,12 +155,22 @@ std::list<frame_handle*>* video::get_frames() noexcept
 	return &m_frames;
 }
 
-void video::entry_mutex() noexcept
+void video::entry_capture_mutex() noexcept
+{
+	m_capture_mutex.lock();
+}
+
+void video::leave_capture_mutex() noexcept
+{
+	m_capture_mutex.unlock();
+}
+
+void video::entry_frame_mutex() noexcept
 {
 	m_frame_mutex.lock();
 }
 
-void video::leave_mutex() noexcept
+void video::leave_frame_mutex() noexcept
 {
 	m_frame_mutex.unlock();
 }
@@ -154,6 +178,11 @@ void video::leave_mutex() noexcept
 bool video::get_pause_state() const noexcept
 {
 	return m_pause_video;
+}
+
+double video::get_display_fps() const noexcept
+{
+	return m_display_fps;
 }
 
 bool video::set_video_path(const char* path) noexcept
@@ -185,19 +214,40 @@ struct frame_handle* video::get_video_frame() noexcept
 {
 	struct frame_handle* temp = nullptr;
 
-	entry_mutex();
+	entry_frame_mutex();
 	for (auto& it = m_frames.begin(); it != m_frames.end(); it++)
 	{
 		if ((*it)->state == e_finish_handle)
 		{
+			this->update_fps();
 			temp = (*it);
 			m_frames.erase(it);
 			break;
 		}
 	}
-	leave_mutex();
+	leave_frame_mutex();
 
 	return temp;
+}
+
+void video::set_frame_index(int index) noexcept
+{
+	if (m_capture.isOpened() == false) return;
+
+	entry_capture_mutex();
+	m_capture.set(cv::CAP_PROP_POS_FRAMES, index);
+	leave_capture_mutex();
+}
+
+void video::set_frame_index(float rate) noexcept
+{
+	if (m_capture.isOpened() == false) return;
+
+	float total = m_capture.get(cv::CAP_PROP_FRAME_COUNT);
+
+	entry_capture_mutex();
+	m_capture.set(cv::CAP_PROP_POS_FRAMES, rate * total);
+	leave_capture_mutex();
 }
 
 float video::get_finish_rate() noexcept
@@ -217,15 +267,19 @@ video::video()
 	m_detecting = false;
 
 	m_pause_video = false;
+
+	m_display_fps = 0.0;
 }
 
 video::~video()
 {
-
+	if(m_path) free_memory(m_path);
 }
 
-void video::start() noexcept
+bool video::start() noexcept
 {
+	if (m_path == nullptr) return false;
+
 	this->close();
 
 	auto func = [](_beginthread_proc_type ptr)
@@ -234,9 +288,10 @@ void video::start() noexcept
 	};
 
 	check_warning(func(read_frame_thread) != -1, "∂¡»° ”∆µ÷°œﬂ≥Ã ß∞‹");
-	wait_time(100);
+	wait_time(200);
 	for (int i = 0; i < m_detect_count; i++)
 		check_warning(func(detect_frame_thread) != -1, "ºÏ≤‚ ”∆µ÷°œﬂ≥Ã ß∞‹");
+	return true;
 }
 
 void video::pause() noexcept

@@ -60,7 +60,6 @@ void gui::render_handle() noexcept
 
 	imgui_window_meun();//菜单
 	imgui_display_video();//视频显示
-	imgui_video_control_overlay();//视频控制
 	//ImGui::ShowDemoWindow();
 
 	ImGui::EndFrame();
@@ -176,7 +175,7 @@ void gui::imgui_display_video() noexcept
 		to_utf8("视频播放", z_title, max_string_len);
 	}
 
-	ImGui::SetNextWindowSize(ImVec2{ 500.0f,500.0f }, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2{ 800.0f,300.0f }, ImGuiCond_FirstUseEver);
 	ImGui::Begin(z_title);
 
 	struct frame_handle* data = m_video.get_video_frame();
@@ -185,24 +184,33 @@ void gui::imgui_display_video() noexcept
 		update_texture(data);
 		if (m_IDirect3DTexture9) ImGui::Image(m_IDirect3DTexture9, ImGui::GetContentRegionAvail());
 	}
+
+	ImVec2 pos = ImGui::GetWindowPos();
+	pos.y += ImGui::GetWindowHeight();
+
+	this->imgui_video_control_overlay(pos, ImGui::GetWindowWidth());
 	ImGui::End();
 }
 
-void gui::imgui_video_control_overlay() noexcept
+void gui::imgui_video_control_overlay(ImVec2 pos, float width) noexcept
 {
 	bool state = true;
 	ImGui::SetNextWindowBgAlpha(0.35f);
-	ImGui::SetNextWindowSize(ImVec2{ 500.0f,100.0f });
+	ImGui::SetNextWindowPos(pos);
+	ImGui::SetNextWindowSize(ImVec2{ width,80.0f });
 	ImGui::Begin("controls", &state, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
 
 	char z_pause[max_string_len] = "pause";
 	char z_display[max_string_len] = "display";
 	char z_exit[max_string_len] = "exit";
+	char z_schedule[max_string_len] = "schedule";
+	char z_fps[max_string_len] = "FPS : %.2lf";
 	if (m_is_english == false)
 	{
 		to_utf8("暂停", z_pause, max_string_len);
 		to_utf8("播放", z_display, max_string_len);
 		to_utf8("退出", z_exit, max_string_len);
+		to_utf8("进度", z_schedule, max_string_len);
 	}
 
 	ImVec2 button_size{ 80.0f,30.f };
@@ -212,13 +220,14 @@ void gui::imgui_video_control_overlay() noexcept
 	if (ImGui::Button(z_display, button_size)) m_video.restart();
 	ImGui::SameLine();
 	if (ImGui::Button(z_exit, button_size)) m_video.close();
+	ImGui::SameLine();
 
-	static float progress = 0.0f, progress_dir = 1.0f;
-	progress += progress_dir * 0.4f * ImGui::GetIO().DeltaTime;
-	if (progress >= +1.1f) { progress = +1.1f; progress_dir *= -1.0f; }
-	if (progress <= -0.1f) { progress = -0.1f; progress_dir *= -1.0f; }
-	ImGui::ProgressBar(m_video.get_finish_rate(), ImVec2(500.0f, 0.0f));
-	
+	float value = m_video.get_finish_rate() * 100.0f;
+	if (ImGui::SliderFloat(z_schedule, &value, 0.0f, 100.0f))
+		m_video.set_frame_index(value / 100.0f);
+
+	ImGui::Text(z_fps, m_video.get_display_fps());
+
 	ImGui::End();
 }
 
@@ -237,10 +246,18 @@ void gui::imgui_window_meun() noexcept
 
 void gui::imgui_file_window() noexcept
 {
-	if (ImGui::BeginMenu("File"))
+	char z_file[max_string_len] = "File";
+	char z_load_file[max_string_len] = "Load File";
+	if (m_is_english == false)
+	{
+		to_utf8("文件", z_file, max_string_len);
+		to_utf8("选择文件", z_load_file, max_string_len);
+	}
+
+	if (ImGui::BeginMenu(z_file))
 	{
 		char buffer[max_string_len]{ 0 };
-		if (ImGui::MenuItem("Load file")) 
+		if (ImGui::MenuItem(z_load_file))
 		{
 			get_file_path("Video or Image \0*.mp4;*.flv;*.ts;*.jpg;*.bmp;*.png\0\0", buffer, max_string_len);
 			switch (get_file_type(buffer))
@@ -251,7 +268,6 @@ void gui::imgui_file_window() noexcept
 				break;
 			case 2:
 				break;
-			default: check_warning(false, " %s 未知文件类型", buffer);
 			}
 		}
 		ImGui::EndMenu();
@@ -260,18 +276,32 @@ void gui::imgui_file_window() noexcept
 
 void gui::imgui_model_window() noexcept
 {
-	if (ImGui::BeginMenu("Model"))
+	char z_model[max_string_len] = "Model";
+	char z_detect_model[max_string_len] = "Object detection model";
+	char z_recognition_model[max_string_len] = "License plate recognition model";
+	char z_Load_model[max_string_len] = "Load model";
+	char z_Unload_model[max_string_len] = "Unload model";
+	if (m_is_english == false)
 	{
-		if (ImGui::BeginMenu("Object detection model"))
+		to_utf8("模型", z_model, max_string_len);
+		to_utf8("物体检测模型", z_detect_model, max_string_len);
+		to_utf8("车牌识别系统", z_recognition_model, max_string_len);
+		to_utf8("加载模型", z_Load_model, max_string_len);
+		to_utf8("卸载模型", z_Unload_model, max_string_len);
+	}
+
+	if (ImGui::BeginMenu(z_model))
+	{
+		if (ImGui::BeginMenu(z_detect_model))
 		{
-			if (ImGui::MenuItem("Load model")) {}
-			if (ImGui::MenuItem("Unload model")) {}
+			if (ImGui::MenuItem(z_Load_model)) {}
+			if (ImGui::MenuItem(z_Unload_model)) {}
 			ImGui::EndMenu();
 		}
-		if (ImGui::BeginMenu("License plate recognition model"))
+		if (ImGui::BeginMenu(z_recognition_model))
 		{
-			if (ImGui::MenuItem("Load model")) {}
-			if (ImGui::MenuItem("Unload model")) {}
+			if (ImGui::MenuItem(z_Load_model)) {}
+			if (ImGui::MenuItem(z_Unload_model)) {}
 			ImGui::EndMenu();
 		}
 		ImGui::EndMenu();
