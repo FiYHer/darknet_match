@@ -134,6 +134,8 @@ char* gui::to_utf8(const char* text, char* buffer, int size) noexcept
 
 void gui::update_texture(struct frame_handle* data) noexcept
 {
+	if (data->frame.empty()) return;
+
 	int w = data->frame.cols;
 	int h = data->frame.rows;
 	int c = data->frame.channels();
@@ -162,8 +164,6 @@ void gui::update_texture(struct frame_handle* data) noexcept
 		m_IDirect3DTexture9->UnlockRect(0);
 	}
 
-	data->frame.release();
-	delete data;
 	delete buffer;
 }
 
@@ -178,12 +178,18 @@ void gui::imgui_display_video() noexcept
 	ImGui::SetNextWindowSize(ImVec2{ 800.0f,300.0f }, ImGuiCond_FirstUseEver);
 	ImGui::Begin(z_title);
 
+	static struct frame_handle last_data = {};
 	struct frame_handle* data = m_video.get_video_frame();
 	if (data)
 	{
-		update_texture(data);
-		if (m_IDirect3DTexture9) ImGui::Image(m_IDirect3DTexture9, ImGui::GetContentRegionAvail());
+		if (last_data.frame.empty() == false) last_data.frame.release();
+		data->frame.copyTo(last_data.frame);
+		data->frame.release();
+		delete data;
 	}
+
+	update_texture(&last_data);
+	if (m_IDirect3DTexture9) ImGui::Image(m_IDirect3DTexture9, ImGui::GetContentRegionAvail());
 
 	ImVec2 pos = ImGui::GetWindowPos();
 	pos.y += ImGui::GetWindowHeight();
@@ -256,9 +262,9 @@ void gui::imgui_file_window() noexcept
 
 	if (ImGui::BeginMenu(z_file))
 	{
-		char buffer[max_string_len]{ 0 };
 		if (ImGui::MenuItem(z_load_file))
 		{
+			char buffer[max_string_len]{ 0 };
 			get_file_path("Video or Image \0*.mp4;*.flv;*.ts;*.jpg;*.bmp;*.png\0\0", buffer, max_string_len);
 			switch (get_file_type(buffer))
 			{
@@ -285,7 +291,7 @@ void gui::imgui_model_window() noexcept
 	{
 		to_utf8("模型", z_model, max_string_len);
 		to_utf8("物体检测模型", z_detect_model, max_string_len);
-		to_utf8("车牌识别系统", z_recognition_model, max_string_len);
+		to_utf8("车牌识别模型", z_recognition_model, max_string_len);
 		to_utf8("加载模型", z_Load_model, max_string_len);
 		to_utf8("卸载模型", z_Unload_model, max_string_len);
 	}
@@ -294,8 +300,24 @@ void gui::imgui_model_window() noexcept
 	{
 		if (ImGui::BeginMenu(z_detect_model))
 		{
-			if (ImGui::MenuItem(z_Load_model)) {}
-			if (ImGui::MenuItem(z_Unload_model)) {}
+			if (ImGui::MenuItem(z_Load_model)) 
+			{
+				char buffer[max_string_len]{ 0 };
+				get_file_path("Model \0*.model\0\0", buffer, max_string_len);
+
+				object_detect* model = m_video.get_detect_model();
+				if (model->set_model_path(buffer))
+				{
+					if (model->load_model() == false)
+						check_warning(false, "加载物体检测模型失败");
+				}
+				else check_warning(false, "设置模型文件失败");
+
+			}
+			if (ImGui::MenuItem(z_Unload_model)) 
+			{
+				m_video.get_detect_model()->unload_model();
+			}
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu(z_recognition_model))
@@ -337,9 +359,13 @@ void gui::imgui_language_window() noexcept
 
 gui::gui() noexcept
 {
+	m_is_english = false;
+
 	m_IDirect3D9 = nullptr;
 	m_IDirect3DDevice9 = nullptr;
 	m_IDirect3DTexture9 = nullptr;
+
+	m_D3DPRESENT_PARAMETERS = { 0 };
 }
 
 void gui::create_and_show(const char* name /*= "darknet_imgui"*/) noexcept

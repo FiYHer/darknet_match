@@ -1,5 +1,7 @@
 #include "video.h"
 
+
+
 video* video::m_static_this = nullptr;
 
 void __cdecl video::read_frame_thread(void* data)
@@ -20,10 +22,9 @@ void __cdecl video::read_frame_thread(void* data)
 	while (true)
 	{
 		if(m_static_this->get_is_reading() == false) break;
-
 		if (m_static_this->get_pause_state())
 		{
-			wait_time(1000);
+			wait_time(500, true);
 			continue;
 		}
 
@@ -49,12 +50,11 @@ void __cdecl video::read_frame_thread(void* data)
 
 		}
 
-		wait_time(10);
+		wait_time(50, true);
 	}
 
 	capture->release();
 	m_static_this->set_reading(false);
-	m_static_this->close();
 }
 
 void __cdecl video::detect_frame_thread(void* data)
@@ -69,19 +69,18 @@ void __cdecl video::detect_frame_thread(void* data)
 
 		if (m_static_this->get_pause_state())
 		{
-			wait_time(1000);
+			wait_time(500, true);
 			continue;
 		}
 
 		struct frame_handle* temp = nullptr;
-
 		m_static_this->entry_frame_mutex();
-		for (auto& it = frames_list->begin(); it != frames_list->end(); it++)
+		for (auto& it : *frames_list)
 		{
-			if ((*it)->state == e_un_handle)
+			if (it->state == e_un_handle)
 			{
-				(*it)->state = e_detec_handle;
-				temp = (*it);
+				it->state = e_detec_handle;
+				temp = it;
 				break;
 			}
 		}
@@ -89,12 +88,40 @@ void __cdecl video::detect_frame_thread(void* data)
 
 		if (temp)
 		{
-			//检测.....
+			//模型加载
+			if (m_static_this->get_detect_model()->get_model_loader())
+			{
+				//转化视频帧
+				network* net = m_static_this->get_detect_model()->get_network();
+				int classes_count = m_static_this->get_detect_model()->get_classes_count();
+				image mat = m_static_this->to_image(temp->frame, net->w, net->h, net->c);
+
+				//网络预测
+				network_predict(*net, mat.data);
+
+				//阈值相关
+				float thresh = m_static_this->get_detect_model()->get_thresh();
+				float hier_thresh = m_static_this->get_detect_model()->get_hier_thresh();
+				float nms = m_static_this->get_detect_model()->get_nms();
+
+				//获取方框数量
+				int box_count = 0;
+				detection* result = get_network_boxes(net, net->w, net->h, thresh, hier_thresh, 0, 1, &box_count, 0);
+
+				//非极大值抑制
+				do_nms_sort(result, box_count, classes_count, nms);
+
+				//绘制方框和字体
+				m_static_this->draw_box_and_font(result, box_count, &temp->frame);
+
+				//释放内存
+				free_image(mat);
+				free_detections(result, box_count);
+			}
+
+			//完成标记
 			temp->state = e_finish_handle;
-
 		}
-
-		wait_time(10);
 	}
 
 	m_static_this->set_detecting(false);
@@ -183,6 +210,72 @@ bool video::get_pause_state() const noexcept
 double video::get_display_fps() const noexcept
 {
 	return m_display_fps;
+}
+
+object_detect* video::get_detect_model() noexcept
+{
+	return &m_detect_model;
+}
+
+image video::to_image(cv::Mat frame, int out_w, int out_h, int out_c) noexcept
+{
+	cv::Mat temp = cv::Mat(out_w, out_h, out_c);
+	cv::resize(frame, temp, temp.size(), 0, 0, cv::INTER_LINEAR);
+	if (out_c > 1) cv::cvtColor(temp, temp, cv::COLOR_RGB2BGR);
+	
+	image im = make_image(out_w, out_h, out_c);
+	unsigned char *data = (unsigned char *)temp.data;
+	int step = temp.step;
+	for (int y = 0; y < out_h; ++y) 
+	{
+		for (int k = 0; k < out_c; ++k) 
+		{
+			for (int x = 0; x < out_w; ++x)
+			{
+				im.data[k*out_w*out_h + y * out_w + x] = data[y*step + x * out_c + k] / 255.0f;
+			}
+		}
+	}
+	return im;
+}
+
+void video::draw_box_and_font(detection* detect, int count, cv::Mat* frame) noexcept
+{
+	int classes_count = m_detect_model.get_classes_count();
+	float thresh = m_detect_model.get_thresh();
+
+	for (int i = 0; i < count; i++)
+	{
+		for (int j = 0; j < classes_count; j++)
+		{
+			if (detect[i].prob[j] > thresh)
+			{
+				box b = detect[i].bbox;
+				if (std::isnan(b.w) || std::isinf(b.w)) b.w = 0.5;
+				if (std::isnan(b.h) || std::isinf(b.h)) b.h = 0.5;
+				if (std::isnan(b.x) || std::isinf(b.x)) b.x = 0.5;
+				if (std::isnan(b.y) || std::isinf(b.y)) b.y = 0.5;
+				b.w = (b.w < 1) ? b.w : 1;
+				b.h = (b.h < 1) ? b.h : 1;
+				b.x = (b.x < 1) ? b.x : 1;
+				b.y = (b.y < 1) ? b.y : 1;
+
+				int left = (b.x - b.w / 2.)*frame->cols;
+				int right = (b.x + b.w / 2.)*frame->cols;
+				int top = (b.y - b.h / 2.)*frame->rows;
+				int bot = (b.y + b.h / 2.)*frame->rows;
+
+				if (left < 0) left = 0;
+				if (right > frame->cols - 1) right = frame->cols - 1;
+				if (top < 0) top = 0;
+				if (bot > frame->rows - 1) bot = frame->rows - 1;
+
+				//画方框
+				cv::rectangle(*frame, { left,top }, { right,bot }, { 255.0f,255.0f,255.0f }, 2.0f, 8, 0);
+			}
+		}
+
+	}
 }
 
 bool video::set_video_path(const char* path) noexcept
@@ -288,9 +381,8 @@ bool video::start() noexcept
 	};
 
 	check_warning(func(read_frame_thread) != -1, "读取视频帧线程失败");
-	wait_time(200);
-	for (int i = 0; i < m_detect_count; i++)
-		check_warning(func(detect_frame_thread) != -1, "检测视频帧线程失败");
+	wait_time(200, true);
+	check_warning(func(detect_frame_thread) != -1, "检测视频帧线程失败");
 	return true;
 }
 
@@ -312,4 +404,13 @@ void video::close() noexcept
 	m_detecting = false;
 	m_pause_video = false;
 	wait_time(1000);
+
+	entry_frame_mutex();
+	for (auto& it : m_frames)
+	{
+		it->frame.release();
+		delete it;
+	}
+	m_frames.clear();
+	leave_frame_mutex();
 }

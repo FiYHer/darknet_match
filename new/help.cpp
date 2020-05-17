@@ -24,16 +24,21 @@ void check_warning(bool state, const char* format...) noexcept
 	do_handle(false, format);
 }
 
-void wait_time(int i) noexcept
+void wait_time(int i, bool b) noexcept
 {
+	if (b) Sleep(i);
+	else
+	{
 #ifdef _DEBUG
-	Sleep(i);
+		Sleep(i);
 #endif
+	}
 }
 
 void free_memory(void* data)
 {
 	if (data) VirtualFree(data, 0, MEM_RELEASE);
+	data = nullptr;
 }
 
 char* get_file_path(const char* file_type, char* buffer, int size) noexcept

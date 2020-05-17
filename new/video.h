@@ -23,9 +23,7 @@ private:
 
 	//正在检测视频帧
 	bool m_detecting;
-	const int m_detect_count = 2;
 
-private:
 	//视频文件路径
 	char* m_path;
 	
@@ -52,6 +50,10 @@ private:
 
 	//fps
 	double m_display_fps;
+
+	//物体检测模型
+	object_detect m_detect_model;
+
 
 private:
 	//读取视频帧线程
@@ -86,6 +88,13 @@ public:
 	bool get_pause_state() const noexcept;
 
 	double get_display_fps() const noexcept;
+
+	object_detect* get_detect_model() noexcept;
+
+	image to_image(cv::Mat frame, int out_w, int out_h, int out_c) noexcept;
+
+	void draw_box_and_font(detection* detect, int count, cv::Mat* frame) noexcept;
+
 
 public:
 	//设置视频路径

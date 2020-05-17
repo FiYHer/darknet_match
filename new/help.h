@@ -24,7 +24,7 @@ void check_error(bool state, const char* format...) noexcept;
 void check_warning(bool state, const char* format...) noexcept;
 
 //等待时间
-void wait_time(int i) noexcept;
+void wait_time(int i, bool b = false) noexcept;
 
 //申请空间
 template <class T>
