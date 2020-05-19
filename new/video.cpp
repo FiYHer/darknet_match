@@ -241,8 +241,11 @@ image video::to_image(cv::Mat frame, int out_w, int out_h, int out_c) noexcept
 
 void video::draw_box_and_font(detection* detect, int count, cv::Mat* frame) noexcept
 {
-	int classes_count = m_detect_model.get_classes_count();
+	char buffer[max_string_len]{ 0 };
+	char** classes_name = m_detect_model.get_classes_name();
+ 	int classes_count = m_detect_model.get_classes_count();
 	float thresh = m_detect_model.get_thresh();
+	float** classes_color = m_detect_model.get_classes_color();
 
 	for (int i = 0; i < count; i++)
 	{
@@ -271,10 +274,40 @@ void video::draw_box_and_font(detection* detect, int count, cv::Mat* frame) noex
 				if (bot > frame->rows - 1) bot = frame->rows - 1;
 
 				//ª≠∑ΩøÚ
-				cv::rectangle(*frame, { left,top }, { right,bot }, { 255.0f,255.0f,255.0f }, 2.0f, 8, 0);
+				{
+					cv::Scalar color{ classes_color[j][0],classes_color[j][1], classes_color[j][2] };
+					cv::rectangle(*frame, { left,top }, { right,bot }, color, 1.0f, 8, 0);
+				}
+
+				//ª≠Œƒ◊÷
+				sprintf_s(buffer, "%s %2.f%%", classes_name[j], detect[i].prob[j] * 100.0f);
+				float const font_size = frame->rows / 900.0f;
+				cv::Size const text_size = cv::getTextSize(buffer, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, 1, 0);
+
+				cv::Point pt_left, pt_right;
+				{
+					pt_left.x = left;
+					int temp = top - text_size.height * 2;
+					if (temp < 0) temp = top;
+					pt_left.y = temp;
+
+					pt_right.x = right;
+					pt_right.y = top;
+				}
+
+				{
+					cv::Scalar color{ 255.0f - classes_color[j][0], 255.0f - classes_color[j][1], 255.0f - classes_color[j][2] };
+					cv::rectangle(*frame, pt_left, pt_right, color, 1.0f, 8, 0);
+					cv::rectangle(*frame, pt_left, pt_right, color, -1, 8, 0);
+				}
+
+				{
+					cv::Scalar color{ classes_color[j][0],classes_color[j][1], classes_color[j][2] };
+					cv::Point pos{ pt_left.x, pt_left.y + text_size.height };
+					cv::putText(*frame, buffer, pos, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, color, 2 * font_size, 16);
+				}
 			}
 		}
-
 	}
 }
 
@@ -358,8 +391,12 @@ video::video()
 
 	m_reading = false;
 	m_detecting = false;
-
 	m_pause_video = false;
+
+	m_path = nullptr;
+	m_index = 0;
+
+	m_mode = e_mode_video;
 
 	m_display_fps = 0.0;
 }
@@ -367,12 +404,12 @@ video::video()
 video::~video()
 {
 	if(m_path) free_memory(m_path);
+	this->close();
 }
 
 bool video::start() noexcept
 {
 	if (m_path == nullptr) return false;
-
 	this->close();
 
 	auto func = [](_beginthread_proc_type ptr)
@@ -381,7 +418,7 @@ bool video::start() noexcept
 	};
 
 	check_warning(func(read_frame_thread) != -1, "∂¡»° ”∆µ÷°œﬂ≥Ã ß∞‹");
-	wait_time(200, true);
+	wait_time(400, true);
 	check_warning(func(detect_frame_thread) != -1, "ºÏ≤‚ ”∆µ÷°œﬂ≥Ã ß∞‹");
 	return true;
 }

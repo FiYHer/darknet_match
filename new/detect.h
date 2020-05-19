@@ -11,8 +11,11 @@ private:
 	char* m_path;
 
 	//标签名称
-	char** m_classes;
+	char** m_classes_name;
 	int m_classes_count;
+
+	//标签颜色
+	float** m_classes_color;
 
 	//网络
 	network m_net;
@@ -44,6 +47,9 @@ public:
 	//获取标签数量
 	int get_classes_count() const noexcept;
 
+	//获取标签字符串
+	char** get_classes_name() const noexcept;
+
 	//获取模型是否加载
 	bool get_model_loader() const noexcept;
 
@@ -52,7 +58,14 @@ public:
 	float get_hier_thresh() const noexcept;
 	float get_nms() const noexcept;
 
+	//获取类别颜色
+	float** get_classes_color() const noexcept;
 
+	//释放类别名称
+	void free_classes_name() noexcept;
+
+	//释放类别颜色
+	void free_classes_color() noexcept;
 
 
 };

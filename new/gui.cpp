@@ -266,14 +266,18 @@ void gui::imgui_file_window() noexcept
 		{
 			char buffer[max_string_len]{ 0 };
 			get_file_path("Video or Image \0*.mp4;*.flv;*.ts;*.jpg;*.bmp;*.png\0\0", buffer, max_string_len);
-			switch (get_file_type(buffer))
+			bool is_not_empty = strlen(buffer) ? true : false;
+			if (is_not_empty)
 			{
-			case 1:
-				m_video.set_video_path(buffer);
-				m_video.start();
-				break;
-			case 2:
-				break;
+				switch (get_file_type(buffer))
+				{
+				case 1:
+					m_video.set_video_path(buffer);
+					m_video.start();
+					break;
+				case 2:
+					break;
+				}
 			}
 		}
 		ImGui::EndMenu();
