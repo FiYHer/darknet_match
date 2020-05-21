@@ -65,34 +65,61 @@ private:
 	//更新FPS
 	void update_fps() noexcept;
 
-public:
-	bool get_is_reading() const noexcept;
-	bool get_is_detecting() const noexcept;
+	//读取一帧视频图像
+	bool per_frame();
 
+public:
+	//判断是否读取视频帧中
+	bool get_is_reading() const noexcept;
+
+	//判断是否检测视频帧中
+	bool get_is_detecting() const noexcept;
+	
+	//设置读取视频帧状态
 	void set_reading(bool state) noexcept;
+
+	//设置检测视频帧状态
 	void set_detecting(bool state) noexcept;
 
+	//获取视频文件路径
 	const char* get_path() const noexcept;
+
+	//获取摄像头索引
 	int get_index() const noexcept;
 
+	//获取当前模式
 	video_display_mode get_mode() const noexcept;
+
+	//获取视频类指针
 	cv::VideoCapture* get_capture() noexcept;
+
+	//获取视频帧列表指针
 	std::list<frame_handle*>* get_frames() noexcept;
 
+	//视频类互斥
 	void entry_capture_mutex() noexcept;
 	void leave_capture_mutex() noexcept;
 
+	//视频帧互斥
 	void entry_frame_mutex() noexcept;
 	void leave_frame_mutex() noexcept;
 
+	//设置暂停状态
+	void set_payse_state() noexcept;
+
+	//获取暂停状态
 	bool get_pause_state() const noexcept;
 
+	//获取FPS
 	double get_display_fps() const noexcept;
 
+	//获取检测类指针
 	object_detect* get_detect_model() noexcept;
 
+	//视频帧转化图像
 	image to_image(cv::Mat frame, int out_w, int out_h, int out_c) noexcept;
 
+	//绘制方框和字体
 	void draw_box_and_font(detection* detect, int count, cv::Mat* frame) noexcept;
 
 
@@ -110,8 +137,13 @@ public:
 	void set_frame_index(int index) noexcept;
 	void set_frame_index(float rate) noexcept;
 
-	//获取视频播放比率
+	//获取视频播放完成比率
 	float get_finish_rate() noexcept;
+
+	//获取一帧视频
+	void get_per_video_frame(const char* path);
+	void get_per_video_frame(int index);
+
 
 public:
 	video();

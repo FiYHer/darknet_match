@@ -1,7 +1,5 @@
 #include "video.h"
 
-
-
 video* video::m_static_this = nullptr;
 
 void __cdecl video::read_frame_thread(void* data)
@@ -28,7 +26,10 @@ void __cdecl video::read_frame_thread(void* data)
 			continue;
 		}
 
+		m_static_this->entry_frame_mutex();
 		int count = frames_list->size();
+		m_static_this->leave_frame_mutex();
+
 		if (count < 10)
 		{
 			struct frame_handle* temp = new frame_handle;
@@ -88,6 +89,7 @@ void __cdecl video::detect_frame_thread(void* data)
 
 		if (temp)
 		{
+			
 			//模型加载
 			if (m_static_this->get_detect_model()->get_model_loader())
 			{
@@ -118,7 +120,7 @@ void __cdecl video::detect_frame_thread(void* data)
 				free_image(mat);
 				free_detections(result, box_count);
 			}
-
+			
 			//完成标记
 			temp->state = e_finish_handle;
 		}
@@ -135,6 +137,33 @@ void video::update_fps() noexcept
 	double current = 1000000.0 / (after - before);
 	m_display_fps = m_display_fps * 0.9 + current * 0.1;
 	before = after;
+}
+
+bool video::per_frame()
+{
+	bool state = m_capture.isOpened();
+	if (state == false)
+	{
+		check_warning(false, "没有打开视频文件");
+		return false;
+	}
+
+	struct frame_handle* temp = new frame_handle;
+	temp->state = e_finish_handle;
+
+	state = m_capture.read(temp->frame);
+	if (state == false)
+	{
+		check_warning(false, "读取一张视频帧失败");
+		delete temp;
+		return false;
+	}
+
+	this->entry_frame_mutex();
+	m_frames.push_back(temp);
+	this->leave_frame_mutex();
+
+	return true;
 }
 
 bool video::get_is_reading() const noexcept
@@ -200,6 +229,11 @@ void video::entry_frame_mutex() noexcept
 void video::leave_frame_mutex() noexcept
 {
 	m_frame_mutex.unlock();
+}
+
+void video::set_payse_state() noexcept
+{
+	m_pause_video = true;
 }
 
 bool video::get_pause_state() const noexcept
@@ -313,6 +347,8 @@ void video::draw_box_and_font(detection* detect, int count, cv::Mat* frame) noex
 
 bool video::set_video_path(const char* path) noexcept
 {
+	if (get_file_type(path) != 1) return false;
+
 	if (m_path)
 	{
 		free_memory(m_path);
@@ -385,6 +421,54 @@ float video::get_finish_rate() noexcept
 	return current / total;
 }
 
+void video::get_per_video_frame(const char* path)
+{
+	if (m_reading)
+	{
+		check_warning(false, "视频读取中");
+		return;
+	}
+
+	bool state = m_capture.open(path);
+	if (state == false)
+	{
+		check_warning(false, "打开视频文件 %s 失败", path);
+		return;
+	}
+
+	state = per_frame();
+	if (state == false)
+	{
+		check_warning(false, "读取视频帧失败");
+		return;
+	}
+
+}
+
+void video::get_per_video_frame(int index)
+{
+	if (m_detecting)
+	{
+		check_warning(false, "视频读取中");
+		return;
+	}
+
+	bool state = m_capture.open(index);
+	if (state == false)
+	{
+		check_warning(false, "打开视频文件 %d 失败", index);
+		return;
+	}
+
+	state = per_frame();
+	if (state == false)
+	{
+		check_warning(false, "读取视频帧失败");
+		return;
+	}
+
+}
+
 video::video()
 {
 	m_static_this = this;
@@ -409,7 +493,21 @@ video::~video()
 
 bool video::start() noexcept
 {
-	if (m_path == nullptr) return false;
+	if (m_reading)
+	{
+		check_warning(false, "视频正在播放中");
+		return false;
+	}
+
+	if (m_mode == e_mode_video)
+	{
+		if (m_path == nullptr)
+		{
+			check_warning(false, "视频路径有误");
+			return false;
+		}
+	}
+
 	this->close();
 
 	auto func = [](_beginthread_proc_type ptr)

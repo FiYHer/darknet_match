@@ -22,6 +22,9 @@ private:
 	//英文显示
 	bool m_is_english;
 
+	//区域管理显示
+	bool m_region_manager;
+
 	//d3d9设备
 	IDirect3D9* m_IDirect3D9;
 	IDirect3DDevice9* m_IDirect3DDevice9;
@@ -62,23 +65,23 @@ private:
 	//视频显示窗口
 	void imgui_display_video() noexcept;
 
+	//选择视频文件菜单
+	void imgui_select_video(bool update = true) noexcept;
+
 	//覆盖窗口 视频控制选项
 	void imgui_video_control_overlay(ImVec2 pos, float width) noexcept;
 
+	//区域管理功能
+	void imgui_region_manager();
+
 	//窗口主菜单
 	void imgui_window_meun() noexcept;
-
-	//文件窗口
-	void imgui_file_window() noexcept;
 
 	//模型窗口
 	void imgui_model_window() noexcept;
 
 	//窗口
 	void imgui_win_window() noexcept;
-
-	//模式窗口
-	void imgui_mode_window() noexcept;
 
 	//语言窗口
 	void imgui_language_window() noexcept;

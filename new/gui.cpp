@@ -60,7 +60,8 @@ void gui::render_handle() noexcept
 
 	imgui_window_meun();//菜单
 	imgui_display_video();//视频显示
-	//ImGui::ShowDemoWindow();
+	imgui_region_manager();//区域管理
+	ImGui::ShowDemoWindow();
 
 	ImGui::EndFrame();
 	m_IDirect3DDevice9->SetRenderState(D3DRS_ZENABLE, FALSE);
@@ -194,45 +195,153 @@ void gui::imgui_display_video() noexcept
 	ImVec2 pos = ImGui::GetWindowPos();
 	pos.y += ImGui::GetWindowHeight();
 
+	this->imgui_select_video(true);
 	this->imgui_video_control_overlay(pos, ImGui::GetWindowWidth());
 	ImGui::End();
 }
 
+void gui::imgui_select_video(bool update) noexcept
+{
+	static char buffer[max_string_len]{ 0 };
+
+	char z_select[max_string_len] = "select video";
+	if (m_is_english == false)
+	{
+		to_utf8("选择视频", z_select, max_string_len);
+	}
+
+	if (ImGui::BeginPopupContextWindow())
+	{
+		if (ImGui::MenuItem(z_select, nullptr))
+		{
+			get_file_path("video file\0*.mp4;*.flv;*.ts\0\0", buffer, max_string_len);
+			int size = strlen(buffer);
+			if (size)
+			{
+				if(update) m_video.set_video_path(buffer);
+				m_video.get_per_video_frame(buffer);
+			}
+		}
+		ImGui::EndPopup();
+	}
+}
+
 void gui::imgui_video_control_overlay(ImVec2 pos, float width) noexcept
 {
-	bool state = true;
+	static bool state = true;
 	ImGui::SetNextWindowBgAlpha(0.35f);
 	ImGui::SetNextWindowPos(pos);
 	ImGui::SetNextWindowSize(ImVec2{ width,80.0f });
 	ImGui::Begin("controls", &state, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
 
+	bool is_pause = m_video.get_pause_state();
+
+	char z_start[max_string_len] = "start";
 	char z_pause[max_string_len] = "pause";
-	char z_display[max_string_len] = "display";
+	char z_display[max_string_len] = "continue";
 	char z_exit[max_string_len] = "exit";
 	char z_schedule[max_string_len] = "schedule";
-	char z_fps[max_string_len] = "FPS : %.2lf";
+	char z_fps[max_string_len] = "   FPS : %.2lf    ";
 	if (m_is_english == false)
 	{
+		to_utf8("播放", z_start, max_string_len);
 		to_utf8("暂停", z_pause, max_string_len);
-		to_utf8("播放", z_display, max_string_len);
+		to_utf8("继续", z_display, max_string_len);
 		to_utf8("退出", z_exit, max_string_len);
 		to_utf8("进度", z_schedule, max_string_len);
 	}
 
 	ImVec2 button_size{ 80.0f,30.f };
 
-	if (ImGui::Button(z_pause, button_size)) m_video.pause();
+	if (ImGui::Button(z_start, button_size)) m_video.start();
 	ImGui::SameLine();
-	if (ImGui::Button(z_display, button_size)) m_video.restart();
+
+	if (is_pause == false) { if (ImGui::Button(z_pause, button_size)) m_video.pause(); }
+	else if (ImGui::Button(z_display, button_size)) m_video.restart();
 	ImGui::SameLine();
+
 	if (ImGui::Button(z_exit, button_size)) m_video.close();
 	ImGui::SameLine();
 
 	float value = m_video.get_finish_rate() * 100.0f;
-	if (ImGui::SliderFloat(z_schedule, &value, 0.0f, 100.0f))
+	if (ImGui::SliderFloat(z_schedule, &value, 0.0f, 100.0f, "%2.1f"))
 		m_video.set_frame_index(value / 100.0f);
+	ImGui::SameLine();
 
 	ImGui::Text(z_fps, m_video.get_display_fps());
+
+	ImGui::End();
+}
+
+void gui::imgui_region_manager()
+{
+	if (m_region_manager == false) return;
+
+	char z_title[max_string_len] = "region manager";
+	if (m_is_english == false)
+	{
+		to_utf8("区域管理", z_title, max_string_len);
+	}
+
+	ImGui::SetNextWindowPos(ImVec2{ 0,0 });
+	ImGui::SetNextWindowSize(ImVec2{ 300.0f,300.0f }, ImGuiCond_FirstUseEver);
+	ImGui::Begin(z_title, &m_region_manager, ImGuiWindowFlags_NoMove);
+
+	imgui_select_video(false);
+	static struct frame_handle last_data = {};
+	struct frame_handle* data = m_video.get_video_frame();
+	if (data)
+	{
+		if (last_data.frame.empty() == false) last_data.frame.release();
+		data->frame.copyTo(last_data.frame);
+		data->frame.release();
+		delete data;
+	}
+
+	update_texture(&last_data);
+	if (m_IDirect3DTexture9) ImGui::Image(m_IDirect3DTexture9, ImGui::GetContentRegionAvail());
+
+	//获取绘制指针
+	ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+	//x减去8.0f  y减去34.0f
+	ImVec2 win_size = ImGui::GetWindowSize();
+	ImVec2 mouse_size = ImGui::GetIO().MousePos;
+	ImVec2 user_size = ImGui::GetContentRegionAvail();
+	ImVec2 cursor_size = ImGui::GetCursorScreenPos();
+
+	//ImGui::Text(u8"窗口大小 : %f  %f ", win_size.x, win_size.y);
+	//ImGui::Text(u8"鼠标位置 : %f  %f ", mouse_size.x, mouse_size.y);
+	//ImGui::Text(u8"可用大小 : %f  %f ", user_size.x, user_size.y);
+	//ImGui::Text(u8"鼠标屏幕 : %f  %f ", cursor_size.x, cursor_size.y);
+
+	static bool first_down = false;
+	static ImVec2 begin_pos{ 0,0 };
+
+	//鼠标左键按下
+	if (ImGui::IsMouseClicked(0))
+	{
+		if (first_down == false)
+		{
+			first_down = true;
+			begin_pos = ImGui::GetIO().MousePos;
+		}
+		else
+		{
+			first_down = false;
+		}
+	}
+
+	//鼠标右键按下
+	if (ImGui::IsMouseClicked(1))
+	{
+
+	}
+
+	ImU32 color = ImColor(ImVec4(1.0f, 1.0f, 0.4f, 1.0f));
+	if(first_down)
+		draw_list->AddRect(begin_pos, ImGui::GetIO().MousePos, color, 0.0f, 0, 0);
+
 
 	ImGui::End();
 }
@@ -241,46 +350,10 @@ void gui::imgui_window_meun() noexcept
 {
 	if (ImGui::BeginMainMenuBar())
 	{
-		imgui_file_window();
 		imgui_model_window();
 		imgui_win_window();
-		imgui_mode_window();
 		imgui_language_window();
 		ImGui::EndMainMenuBar();
-	}
-}
-
-void gui::imgui_file_window() noexcept
-{
-	char z_file[max_string_len] = "File";
-	char z_load_file[max_string_len] = "Load File";
-	if (m_is_english == false)
-	{
-		to_utf8("文件", z_file, max_string_len);
-		to_utf8("选择文件", z_load_file, max_string_len);
-	}
-
-	if (ImGui::BeginMenu(z_file))
-	{
-		if (ImGui::MenuItem(z_load_file))
-		{
-			char buffer[max_string_len]{ 0 };
-			get_file_path("Video or Image \0*.mp4;*.flv;*.ts;*.jpg;*.bmp;*.png\0\0", buffer, max_string_len);
-			bool is_not_empty = strlen(buffer) ? true : false;
-			if (is_not_empty)
-			{
-				switch (get_file_type(buffer))
-				{
-				case 1:
-					m_video.set_video_path(buffer);
-					m_video.start();
-					break;
-				case 2:
-					break;
-				}
-			}
-		}
-		ImGui::EndMenu();
 	}
 }
 
@@ -300,11 +373,13 @@ void gui::imgui_model_window() noexcept
 		to_utf8("卸载模型", z_Unload_model, max_string_len);
 	}
 
+	bool is_load_detect = m_video.get_detect_model()->get_model_loader();
+
 	if (ImGui::BeginMenu(z_model))
 	{
 		if (ImGui::BeginMenu(z_detect_model))
 		{
-			if (ImGui::MenuItem(z_Load_model)) 
+			if (ImGui::MenuItem(z_Load_model, nullptr, false, !is_load_detect))
 			{
 				char buffer[max_string_len]{ 0 };
 				get_file_path("Model \0*.model\0\0", buffer, max_string_len);
@@ -318,7 +393,7 @@ void gui::imgui_model_window() noexcept
 				else check_warning(false, "设置模型文件失败");
 
 			}
-			if (ImGui::MenuItem(z_Unload_model)) 
+			if (ImGui::MenuItem(z_Unload_model, nullptr, false, is_load_detect))
 			{
 				m_video.get_detect_model()->unload_model();
 			}
@@ -336,27 +411,37 @@ void gui::imgui_model_window() noexcept
 
 void gui::imgui_win_window() noexcept
 {
-	if (ImGui::BeginMenu("Windows"))
+	char z_title[max_string_len] = "Windows";
+	char z_region[max_string_len] = "region manager";
+	if (m_is_english == false)
 	{
-		ImGui::EndMenu();
+		to_utf8("窗口", z_title, max_string_len);
+		to_utf8("区域管理", z_region, max_string_len);
 	}
-}
 
-void gui::imgui_mode_window() noexcept
-{
-	if (ImGui::BeginMenu("Mode"))
+	if (ImGui::BeginMenu(z_title))
 	{
+		if (ImGui::MenuItem(z_region)) m_region_manager = true;
 		ImGui::EndMenu();
 	}
 }
 
 void gui::imgui_language_window() noexcept
 {
-	if (ImGui::BeginMenu("Language"))
+	char z_title[max_string_len] = "Language";
+	char z_english[max_string_len] = "English";
+	char z_chinese[max_string_len] = "Chinese";
+	if (m_is_english == false)
 	{
-		char text[1024]{ 0 };
-		if (ImGui::MenuItem("English display"))  set_english_display(true);
-		if (ImGui::MenuItem(to_utf8("中文显示", text, 1024))) set_english_display(false);
+		to_utf8("语言", z_title, max_string_len);
+		to_utf8("英语", z_english, max_string_len);
+		to_utf8("中文", z_chinese, max_string_len);
+	}
+
+	if (ImGui::BeginMenu(z_title))
+	{
+		if (ImGui::MenuItem(z_english))  set_english_display(true);
+		if (ImGui::MenuItem(z_chinese)) set_english_display(false);
 		ImGui::EndMenu();
 	}
 }
@@ -364,6 +449,7 @@ void gui::imgui_language_window() noexcept
 gui::gui() noexcept
 {
 	m_is_english = false;
+	m_region_manager = false;
 
 	m_IDirect3D9 = nullptr;
 	m_IDirect3DDevice9 = nullptr;

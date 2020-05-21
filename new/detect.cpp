@@ -10,8 +10,8 @@ object_detect::object_detect()
 {
 	m_path = nullptr;
 	m_classes_name = nullptr;
-	m_loaded = false;
 	m_classes_count = 0;
+	m_loaded = false;
 
 	m_classes_color = nullptr;
 
@@ -112,6 +112,7 @@ bool object_detect::unload_model() noexcept
 		free_network(m_net);
 	free_classes_name();
 	free_classes_color();
+	m_loaded = false;
 	return true;
 }
 
@@ -181,5 +182,11 @@ void object_detect::free_classes_name() noexcept
 
 void object_detect::free_classes_color() noexcept
 {
-
+	if (m_classes_color)
+	{
+		for (int i = 0; i < m_classes_count; i++)
+			free_memory(m_classes_color[i]);
+		free_memory(m_classes_color);
+	}
+	m_classes_color = nullptr;
 }

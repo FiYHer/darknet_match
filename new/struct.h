@@ -1,6 +1,7 @@
 #pragma once
 #include <opencv2/opencv.hpp>
 
+//视频播放类型
 enum video_display_mode
 {
 	//视频模式
@@ -10,6 +11,7 @@ enum video_display_mode
 	e_mode_camera
 };
 
+//视频帧处理状态
 enum frame_handle_state
 {
 	//未处理
@@ -22,6 +24,7 @@ enum frame_handle_state
 	e_finish_handle
 };
 
+//视频帧处理信息
 struct frame_handle
 {
 	//视频帧
@@ -30,6 +33,36 @@ struct frame_handle
 	//处理状态
 	enum frame_handle_state state;
 };
+
+//区域类型
+enum region_type
+{
+	//公交车道
+	region_bus,
+
+	//斑马线
+	region_zebra_cross
+};
+
+struct region_info
+{
+	//
+	int x, y, w, h;
+
+	//区域类型
+	enum region_type type;
+
+
+};
+
+
+
+
+
+
+
+
+
 
 
 
