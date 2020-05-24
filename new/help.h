@@ -41,12 +41,3 @@ char* get_file_path(const char* file_type, char* buffer, int size) noexcept;
 
 //获取文件的类型
 int get_file_type(const char* path) noexcept;
-
-
-
-
-
-
-
-
-

@@ -40,7 +40,8 @@ void gui::initialize_imgui() noexcept
 {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGui::StyleColorsDark();
+	//ImGui::StyleColorsDark();
+	ImGui::StyleColorsLight();
 	//ImGui::GetStyle().FrameRounding = 120.f;
 	//ImGui::GetStyle().GrabRounding = 12.0f;
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -67,7 +68,7 @@ void gui::render_handle() noexcept
 	m_IDirect3DDevice9->SetRenderState(D3DRS_ZENABLE, FALSE);
 	m_IDirect3DDevice9->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 	m_IDirect3DDevice9->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-	m_IDirect3DDevice9->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_RGBA(255, 255, 255, 255), 1.0f, 0);
+	m_IDirect3DDevice9->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_RGBA(255, 174, 200, 255), 1.0f, 0);
 
 	if (m_IDirect3DDevice9->BeginScene() >= 0)
 	{
@@ -176,7 +177,7 @@ void gui::imgui_display_video() noexcept
 		to_utf8("视频播放", z_title, max_string_len);
 	}
 
-	ImGui::SetNextWindowSize(ImVec2{ 800.0f,300.0f }, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2{ 900.0f,500.0f }, ImGuiCond_FirstUseEver);
 	ImGui::Begin(z_title);
 
 	static struct frame_handle last_data = {};
@@ -218,7 +219,7 @@ void gui::imgui_select_video(bool update) noexcept
 			int size = strlen(buffer);
 			if (size)
 			{
-				if(update) m_video.set_video_path(buffer);
+				if (update) m_video.set_video_path(buffer);
 				m_video.get_per_video_frame(buffer);
 			}
 		}
@@ -231,19 +232,24 @@ void gui::imgui_video_control_overlay(ImVec2 pos, float width) noexcept
 	static bool state = true;
 	ImGui::SetNextWindowBgAlpha(0.35f);
 	ImGui::SetNextWindowPos(pos);
-	ImGui::SetNextWindowSize(ImVec2{ width,80.0f });
+	ImGui::SetNextWindowSize(ImVec2{ width,50.0f });
 	ImGui::Begin("controls", &state, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
 
 	bool is_pause = m_video.get_pause_state();
 
+	static char path[max_string_len]{ 0 };
+	static ImVec2 button_size{ 80.0f,30.f };
+
+	char z_select[max_string_len] = "select video file";
 	char z_start[max_string_len] = "start";
 	char z_pause[max_string_len] = "pause";
 	char z_display[max_string_len] = "continue";
 	char z_exit[max_string_len] = "exit";
 	char z_schedule[max_string_len] = "schedule";
-	char z_fps[max_string_len] = "   FPS : %.2lf    ";
+	char z_fps[max_string_len] = "   FPS : %2.2lf    ";
 	if (m_is_english == false)
 	{
+		to_utf8("选择视频文件", z_select, max_string_len);
 		to_utf8("播放", z_start, max_string_len);
 		to_utf8("暂停", z_pause, max_string_len);
 		to_utf8("继续", z_display, max_string_len);
@@ -251,7 +257,17 @@ void gui::imgui_video_control_overlay(ImVec2 pos, float width) noexcept
 		to_utf8("进度", z_schedule, max_string_len);
 	}
 
-	ImVec2 button_size{ 80.0f,30.f };
+	if (ImGui::Button(z_select, { 120.0f,30.0f }))
+	{
+		get_file_path("video file\0*.mp4;*.flv;*.ts\0\0", path, max_string_len);
+		int size = strlen(path);
+		if (size)
+		{
+			m_video.set_video_path(path);
+			m_video.get_per_video_frame(path);
+		}
+	}
+	ImGui::SameLine();
 
 	if (ImGui::Button(z_start, button_size)) m_video.start();
 	ImGui::SameLine();
@@ -268,7 +284,7 @@ void gui::imgui_video_control_overlay(ImVec2 pos, float width) noexcept
 		m_video.set_frame_index(value / 100.0f);
 	ImGui::SameLine();
 
-	ImGui::Text(z_fps, m_video.get_display_fps());
+	ImGui::TextColored(ImVec4{ 1.0f,0,0,1.0f }, z_fps, m_video.get_display_fps());
 
 	ImGui::End();
 }
@@ -285,6 +301,7 @@ void gui::imgui_region_manager()
 
 	ImGui::SetNextWindowPos(ImVec2{ 0,0 });
 	ImGui::SetNextWindowSize(ImVec2{ 300.0f,300.0f }, ImGuiCond_FirstUseEver);
+	if (ImGui::IsKeyPressed(112)) ImGui::SetNextWindowSize(ImVec2{ 300.0f,300.0f });
 	ImGui::Begin(z_title, &m_region_manager, ImGuiWindowFlags_NoMove);
 
 	imgui_select_video(false);
@@ -298,8 +315,48 @@ void gui::imgui_region_manager()
 		delete data;
 	}
 
+	//按键space
+	if (ImGui::IsKeyPressed(32))
+		if (last_data.frame.empty() == false)
+			last_data.frame.release();
+
 	update_texture(&last_data);
 	if (m_IDirect3DTexture9) ImGui::Image(m_IDirect3DTexture9, ImGui::GetContentRegionAvail());
+
+	{
+		if (last_data.frame.empty())
+		{
+			char z_text1[max_string_len] = "introduction : ";
+			char z_text2[max_string_len] = "press [VK_F1] to reset the window size to 300x300";
+			char z_text3[max_string_len] = "press [VK_DELETE] to delete the last locale";
+			char z_text4[max_string_len] = "press [VK_SPACE] to delete the video frame setting";
+			char z_text5[max_string_len] = "click the left mouse button to set the area information";
+			char z_text6[max_string_len] = "press [VK_NUMBER0] to set the bus lane area";
+			char z_text7[max_string_len] = "press [VK_NUMBER1] to set the zebra crossing area";
+			if (m_is_english == false)
+			{
+				to_utf8("介绍 : ", z_text1, max_string_len);
+				to_utf8("按[VK_F1]重置窗口大小为300x300", z_text2, max_string_len);
+				to_utf8("按[VK_DELETE]删除上一个区域设置", z_text3, max_string_len);
+				to_utf8("按[VK_SPACE]删除视频帧设置", z_text4, max_string_len);
+				to_utf8("单击鼠标左键设置区域信息", z_text5, max_string_len);
+				to_utf8("按[VK_NUMBER0]设置公交车道区域", z_text6, max_string_len);
+				to_utf8("按[VK_NUMBER1]设置斑马线区域", z_text7, max_string_len);
+			}
+
+			ImGui::Text(z_text1);
+			ImGui::Text(z_text2);
+			ImGui::Text(z_text3);
+			ImGui::Text(z_text4);
+			ImGui::Text(z_text5);
+			ImGui::Text(z_text6);
+			ImGui::Text(z_text7);
+		}
+	}
+
+	static enum region_type reg_type = region_bus;
+	if (GetAsyncKeyState(VK_NUMPAD0) & 0x8000) reg_type = region_bus;
+	if (GetAsyncKeyState(VK_NUMPAD1) & 0x8000) reg_type = region_zebra_cross;
 
 	//获取绘制指针
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
@@ -321,27 +378,49 @@ void gui::imgui_region_manager()
 	//鼠标左键按下
 	if (ImGui::IsMouseClicked(0))
 	{
-		if (first_down == false)
+		if (mouse_size.x < win_size.x  && mouse_size.y < win_size.y)
 		{
-			first_down = true;
-			begin_pos = ImGui::GetIO().MousePos;
-		}
-		else
-		{
-			first_down = false;
+			if (first_down == false)
+			{
+				first_down = true;
+				begin_pos = mouse_size;
+			}
+			else
+			{
+				first_down = false;
+
+				float x = abs(begin_pos.x - mouse_size.x);
+				float y = abs(begin_pos.y - mouse_size.y);
+				if (x > 30.0f || y > 30.0f)
+				{
+					struct region_info temp;
+					temp.type = reg_type;
+					if (reg_type == region_bus) temp.color = ImColor(ImVec4(1.0f, 0.0f, 0.4f, 1.0f));
+					if (reg_type == region_zebra_cross) temp.color = ImColor(ImVec4(0, 1.0f, 0.4f, 1.0f));
+					temp.rect.left = begin_pos.x;
+					temp.rect.top = begin_pos.y;
+					temp.rect.right = mouse_size.x;
+					temp.rect.down = mouse_size.y;
+					m_video.push_region_back(temp);
+				}
+			}
 		}
 	}
 
-	//鼠标右键按下
-	if (ImGui::IsMouseClicked(1))
+	//按键delete
+	if (ImGui::IsKeyPressed(8))
 	{
-
+		first_down = false;
+		m_video.pop_region_back();
 	}
 
-	ImU32 color = ImColor(ImVec4(1.0f, 1.0f, 0.4f, 1.0f));
-	if(first_down)
-		draw_list->AddRect(begin_pos, ImGui::GetIO().MousePos, color, 0.0f, 0, 0);
+	const ImU32 color = ImColor(ImVec4(1.0f, 1.0f, 0.4f, 1.0f));
+	if (first_down)
+		draw_list->AddRect(begin_pos, mouse_size, color, 0.0f, 0, 0);
 
+	auto region_list = m_video.get_region_list();
+	for (auto& it : region_list)
+		draw_list->AddRect({ (float)it.rect.left,(float)it.rect.top }, { (float)it.rect.right,(float)it.rect.down }, it.color, 0.0f, 0, 0);
 
 	ImGui::End();
 }
@@ -351,6 +430,7 @@ void gui::imgui_window_meun() noexcept
 	if (ImGui::BeginMainMenuBar())
 	{
 		imgui_model_window();
+		imgui_features_window();
 		imgui_win_window();
 		imgui_language_window();
 		ImGui::EndMainMenuBar();
@@ -391,7 +471,6 @@ void gui::imgui_model_window() noexcept
 						check_warning(false, "加载物体检测模型失败");
 				}
 				else check_warning(false, "设置模型文件失败");
-
 			}
 			if (ImGui::MenuItem(z_Unload_model, nullptr, false, is_load_detect))
 			{
@@ -405,6 +484,31 @@ void gui::imgui_model_window() noexcept
 			if (ImGui::MenuItem(z_Unload_model)) {}
 			ImGui::EndMenu();
 		}
+		ImGui::EndMenu();
+	}
+}
+
+void gui::imgui_features_window() noexcept
+{
+	char z_title[max_string_len] = "feature";
+	char z_calc_people[max_string_len] = "people flow detection";
+	char z_calc_car[max_string_len] = "vehicle flow detection";
+	char z_occupy_bus[max_string_len] = "occupy the bus lane";
+
+	if (m_is_english == false)
+	{
+		to_utf8("功能", z_title, max_string_len);
+		to_utf8("统计人流量", z_calc_people, max_string_len);
+		to_utf8("统计车流量", z_calc_car, max_string_len);
+		to_utf8("占用公交车道", z_occupy_bus, max_string_len);
+	}
+
+	if (ImGui::BeginMenu(z_title))
+	{
+		static bool enabled = true;
+		ImGui::MenuItem(z_calc_people, nullptr, &enabled);
+		ImGui::MenuItem(z_calc_car, nullptr, &enabled);
+		ImGui::MenuItem(z_occupy_bus, nullptr, &enabled);
 		ImGui::EndMenu();
 	}
 }
@@ -472,7 +576,7 @@ void gui::create_and_show(const char* name /*= "darknet_imgui"*/) noexcept
 	check_error(RegisterClassExA(&window_class), "注册类失败");
 
 	m_hwnd = CreateWindowA(name, name, WS_OVERLAPPEDWINDOW,
-		100, 100, 1200, 600, 0, 0, GetModuleHandleA(nullptr), 0);
+		10, 10, 1200, 700, 0, 0, GetModuleHandleA(nullptr), 0);
 	check_error(m_hwnd, "窗口创建失败");
 
 	initialize_d3d9();

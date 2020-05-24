@@ -26,7 +26,7 @@ private:
 
 	//视频文件路径
 	char* m_path;
-	
+
 	//摄像头索引
 	int m_index;
 
@@ -54,6 +54,18 @@ private:
 	//物体检测模型
 	object_detect m_detect_model;
 
+	//区域列表
+	std::vector<region_info> m_regions;
+
+	//区域互斥
+	std::mutex m_region_mutex;
+
+private:
+	//检测人流量
+	struct calc_people_info m_calc_people;
+
+	//检测车流量
+	struct calc_car_info m_calc_car;
 
 private:
 	//读取视频帧线程
@@ -68,13 +80,16 @@ private:
 	//读取一帧视频图像
 	bool per_frame();
 
+	//转化为实际坐标
+	void box_to_pos(box b, int w, int h, int& left, int& top, int& right, int& bot);
+
 public:
 	//判断是否读取视频帧中
 	bool get_is_reading() const noexcept;
 
 	//判断是否检测视频帧中
 	bool get_is_detecting() const noexcept;
-	
+
 	//设置读取视频帧状态
 	void set_reading(bool state) noexcept;
 
@@ -122,6 +137,27 @@ public:
 	//绘制方框和字体
 	void draw_box_and_font(detection* detect, int count, cv::Mat* frame) noexcept;
 
+	//获取区域列表
+	std::vector<region_info> get_region_list() const noexcept;
+
+	//区域互斥
+	void entry_region_mutex() noexcept;
+	void leave_region_mutex() noexcept;
+
+	//加入区域到尾部
+	void push_region_back(struct region_info& region) noexcept;
+
+	//从尾部删除区域
+	void pop_region_back() noexcept;
+
+	//场景管理
+	void scene_manager(detection* detect, int count) noexcept;
+
+	//人流量统计场景
+	void scene_calc_people(std::vector<box> b) noexcept;
+
+	//车流量统计场景
+	void scene_calc_car(std::vector<box> b) noexcept;
 
 public:
 	//设置视频路径
@@ -144,14 +180,13 @@ public:
 	void get_per_video_frame(const char* path);
 	void get_per_video_frame(int index);
 
-
 public:
 	video();
 	~video();
 
 	//开始播放视频
 	bool start() noexcept;
-	
+
 	//暂停播放视频
 	void pause() noexcept;
 
@@ -160,6 +195,4 @@ public:
 
 	//关闭视频播放
 	void close() noexcept;
-
 };
-

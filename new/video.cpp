@@ -19,7 +19,7 @@ void __cdecl video::read_frame_thread(void* data)
 	m_static_this->set_reading(true);
 	while (true)
 	{
-		if(m_static_this->get_is_reading() == false) break;
+		if (m_static_this->get_is_reading() == false) break;
 		if (m_static_this->get_pause_state())
 		{
 			wait_time(500, true);
@@ -48,10 +48,9 @@ void __cdecl video::read_frame_thread(void* data)
 			m_static_this->entry_frame_mutex();
 			frames_list->push_back(temp);
 			m_static_this->leave_frame_mutex();
-
 		}
 
-		wait_time(50, true);
+		wait_time(15, true);
 	}
 
 	capture->release();
@@ -89,9 +88,9 @@ void __cdecl video::detect_frame_thread(void* data)
 
 		if (temp)
 		{
-			
-			//模型加载
-			if (m_static_this->get_detect_model()->get_model_loader())
+			//检测模型是否加载
+			bool status = m_static_this->get_detect_model()->get_model_loader();
+			if (status)
 			{
 				//转化视频帧
 				network* net = m_static_this->get_detect_model()->get_network();
@@ -116,11 +115,14 @@ void __cdecl video::detect_frame_thread(void* data)
 				//绘制方框和字体
 				m_static_this->draw_box_and_font(result, box_count, &temp->frame);
 
+				//相关场景检测
+				m_static_this->scene_manager(result, box_count);
+
 				//释放内存
 				free_image(mat);
 				free_detections(result, box_count);
 			}
-			
+
 			//完成标记
 			temp->state = e_finish_handle;
 		}
@@ -164,6 +166,28 @@ bool video::per_frame()
 	this->leave_frame_mutex();
 
 	return true;
+}
+
+void video::box_to_pos(box b, int w, int h, int& left, int& top, int& right, int& bot)
+{
+	if (std::isnan(b.w) || std::isinf(b.w)) b.w = 0.5;
+	if (std::isnan(b.h) || std::isinf(b.h)) b.h = 0.5;
+	if (std::isnan(b.x) || std::isinf(b.x)) b.x = 0.5;
+	if (std::isnan(b.y) || std::isinf(b.y)) b.y = 0.5;
+	b.w = (b.w < 1) ? b.w : 1;
+	b.h = (b.h < 1) ? b.h : 1;
+	b.x = (b.x < 1) ? b.x : 1;
+	b.y = (b.y < 1) ? b.y : 1;
+
+	left = (b.x - b.w / 2.)*w;
+	right = (b.x + b.w / 2.)*w;
+	top = (b.y - b.h / 2.)*h;
+	bot = (b.y + b.h / 2.)*h;
+
+	if (left < 0) left = 0;
+	if (right > w - 1) right = w - 1;
+	if (top < 0) top = 0;
+	if (bot > h - 1) bot = h - 1;
 }
 
 bool video::get_is_reading() const noexcept
@@ -256,13 +280,13 @@ image video::to_image(cv::Mat frame, int out_w, int out_h, int out_c) noexcept
 	cv::Mat temp = cv::Mat(out_w, out_h, out_c);
 	cv::resize(frame, temp, temp.size(), 0, 0, cv::INTER_LINEAR);
 	if (out_c > 1) cv::cvtColor(temp, temp, cv::COLOR_RGB2BGR);
-	
+
 	image im = make_image(out_w, out_h, out_c);
 	unsigned char *data = (unsigned char *)temp.data;
 	int step = temp.step;
-	for (int y = 0; y < out_h; ++y) 
+	for (int y = 0; y < out_h; ++y)
 	{
-		for (int k = 0; k < out_c; ++k) 
+		for (int k = 0; k < out_c; ++k)
 		{
 			for (int x = 0; x < out_w; ++x)
 			{
@@ -277,7 +301,7 @@ void video::draw_box_and_font(detection* detect, int count, cv::Mat* frame) noex
 {
 	char buffer[max_string_len]{ 0 };
 	char** classes_name = m_detect_model.get_classes_name();
- 	int classes_count = m_detect_model.get_classes_count();
+	int classes_count = m_detect_model.get_classes_count();
 	float thresh = m_detect_model.get_thresh();
 	float** classes_color = m_detect_model.get_classes_color();
 
@@ -288,24 +312,8 @@ void video::draw_box_and_font(detection* detect, int count, cv::Mat* frame) noex
 			if (detect[i].prob[j] > thresh)
 			{
 				box b = detect[i].bbox;
-				if (std::isnan(b.w) || std::isinf(b.w)) b.w = 0.5;
-				if (std::isnan(b.h) || std::isinf(b.h)) b.h = 0.5;
-				if (std::isnan(b.x) || std::isinf(b.x)) b.x = 0.5;
-				if (std::isnan(b.y) || std::isinf(b.y)) b.y = 0.5;
-				b.w = (b.w < 1) ? b.w : 1;
-				b.h = (b.h < 1) ? b.h : 1;
-				b.x = (b.x < 1) ? b.x : 1;
-				b.y = (b.y < 1) ? b.y : 1;
-
-				int left = (b.x - b.w / 2.)*frame->cols;
-				int right = (b.x + b.w / 2.)*frame->cols;
-				int top = (b.y - b.h / 2.)*frame->rows;
-				int bot = (b.y + b.h / 2.)*frame->rows;
-
-				if (left < 0) left = 0;
-				if (right > frame->cols - 1) right = frame->cols - 1;
-				if (top < 0) top = 0;
-				if (bot > frame->rows - 1) bot = frame->rows - 1;
+				int left, top, right, bot;
+				box_to_pos(b, frame->cols, frame->rows, left, top, right, bot);
 
 				//画方框
 				{
@@ -343,6 +351,87 @@ void video::draw_box_and_font(detection* detect, int count, cv::Mat* frame) noex
 			}
 		}
 	}
+}
+
+std::vector<region_info> video::get_region_list() const noexcept
+{
+	return m_regions;
+}
+
+void video::entry_region_mutex() noexcept
+{
+	m_region_mutex.lock();
+}
+
+void video::leave_region_mutex() noexcept
+{
+	m_region_mutex.unlock();
+}
+
+void video::push_region_back(struct region_info& region) noexcept
+{
+	entry_region_mutex();
+	m_regions.push_back(region);
+	leave_region_mutex();
+}
+
+void video::pop_region_back() noexcept
+{
+	entry_region_mutex();
+	if (m_regions.size()) m_regions.pop_back();
+	leave_region_mutex();
+}
+
+void video::scene_manager(detection* detect, int count) noexcept
+{
+	int classes_count = m_detect_model.get_classes_count();
+	int thresh = m_detect_model.get_thresh();
+
+	using box_list = std::vector<box>;
+	box_list license_plate_list;
+	box_list car_list;
+	box_list bus_list;
+	box_list people_list;
+	box_list traffic_light_list;
+
+	for (int i = 0; i < count; i++)
+	{
+		for (int j = 0; j < classes_count; j++)
+		{
+			if (detect->prob[j] > thresh)
+			{
+				box b = detect[i].bbox;
+				switch (j)
+				{
+				case object_license_plate: license_plate_list.push_back(b); break;
+				case object_car: car_list.push_back(b); break;
+				case object_bus: bus_list.push_back(b); break;
+				case objetc_person: people_list.push_back(b); break;
+				case object_traffic_light: traffic_light_list.push_back(b); break;
+				}
+				break;
+			}
+		}
+	}
+
+	if (m_calc_people.enable) scene_calc_people(people_list);
+	if (m_calc_car.enable) scene_calc_car(car_list);
+}
+
+void video::scene_calc_people(std::vector<box> b) noexcept
+{
+	using box_list = std::vector<box>;
+	static box_list last_box;
+
+	last_box = std::move(b);
+}
+
+void video::scene_calc_car(std::vector<box> b) noexcept
+{
+	using box_list = std::vector<box>;
+	static box_list last_box;
+
+	last_box = std::move(b);
 }
 
 bool video::set_video_path(const char* path) noexcept
@@ -442,7 +531,6 @@ void video::get_per_video_frame(const char* path)
 		check_warning(false, "读取视频帧失败");
 		return;
 	}
-
 }
 
 void video::get_per_video_frame(int index)
@@ -466,7 +554,6 @@ void video::get_per_video_frame(int index)
 		check_warning(false, "读取视频帧失败");
 		return;
 	}
-
 }
 
 video::video()
@@ -482,12 +569,12 @@ video::video()
 
 	m_mode = e_mode_video;
 
-	m_display_fps = 0.0;
+	m_display_fps = 0;
 }
 
 video::~video()
 {
-	if(m_path) free_memory(m_path);
+	if (m_path) free_memory(m_path);
 	this->close();
 }
 
@@ -523,7 +610,7 @@ bool video::start() noexcept
 
 void video::pause() noexcept
 {
-	if(m_reading && m_detecting)
+	if (m_reading && m_detecting)
 		m_pause_video = true;
 }
 
@@ -538,7 +625,7 @@ void video::close() noexcept
 	m_reading = false;
 	m_detecting = false;
 	m_pause_video = false;
-	wait_time(1000);
+	wait_time(1000, true);
 
 	entry_frame_mutex();
 	for (auto& it : m_frames)

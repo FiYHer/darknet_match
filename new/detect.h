@@ -66,7 +66,4 @@ public:
 
 	//释放类别颜色
 	void free_classes_color() noexcept;
-
-
 };
-

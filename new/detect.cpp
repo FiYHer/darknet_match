@@ -29,11 +29,11 @@ object_detect::~object_detect()
 
 bool object_detect::load_model() noexcept
 {
-	if (m_loaded || m_path == nullptr) 
+	if (m_loaded || m_path == nullptr)
 		return false;
 
 	std::fstream file(m_path, std::fstream::in);
-	if (file.is_open() == false) 
+	if (file.is_open() == false)
 		return false;
 
 	std::string names_path, cfg_path, weights_path;
@@ -118,7 +118,7 @@ bool object_detect::unload_model() noexcept
 
 bool object_detect::set_model_path(const char* path) noexcept
 {
-	if(m_path) free_memory(m_path);
+	if (m_path) free_memory(m_path);
 
 	int size = strlen(path);
 	m_path = alloc_memory<char*>(size);

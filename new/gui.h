@@ -80,14 +80,14 @@ private:
 	//模型窗口
 	void imgui_model_window() noexcept;
 
+	//功能窗口
+	void imgui_features_window() noexcept;
+
 	//窗口
 	void imgui_win_window() noexcept;
 
 	//语言窗口
 	void imgui_language_window() noexcept;
-
-
-
 
 public:
 	gui() noexcept;
@@ -103,7 +103,4 @@ public:
 
 	//设置英文显示
 	void set_english_display(bool enable) noexcept;
-
-
 };
-
