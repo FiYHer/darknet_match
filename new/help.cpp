@@ -63,6 +63,7 @@ int get_file_type(const char* path) noexcept
 		//视频文件
 		if (path[len - 3] == 'm' && path[len - 2] == 'p' && path[len - 1] == '4') return 1;
 		if (path[len - 3] == 'f' && path[len - 2] == 'l' && path[len - 1] == 'v') return 1;
+		if (path[len - 3] == 'a' && path[len - 2] == 'v' && path[len - 1] == 'i') return 1;
 		if (path[len - 2] == 't' && path[len - 1] == 's') return 1;
 
 		//图片文件
@@ -71,4 +72,10 @@ int get_file_type(const char* path) noexcept
 		if (path[len - 3] == 'b' && path[len - 2] == 'm' && path[len - 1] == 'p') return 2;
 	}
 	return 0;
+}
+
+int get_current_minute() noexcept
+{
+	time_t t = time(0);
+	return localtime(&t)->tm_min;
 }

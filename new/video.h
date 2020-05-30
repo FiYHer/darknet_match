@@ -83,6 +83,9 @@ private:
 	//转化为实际坐标
 	void box_to_pos(box b, int w, int h, int& left, int& top, int& right, int& bot);
 
+	//判断两个矩阵的相交度
+	bool is_coincide_rate(box a, box b, float value = 0.5f);
+
 public:
 	//判断是否读取视频帧中
 	bool get_is_reading() const noexcept;
@@ -151,13 +154,19 @@ public:
 	void pop_region_back() noexcept;
 
 	//场景管理
-	void scene_manager(detection* detect, int count) noexcept;
+	void scene_manager(detection* detect, int count, int w, int h) noexcept;
 
 	//人流量统计场景
 	void scene_calc_people(std::vector<box> b) noexcept;
 
 	//车流量统计场景
 	void scene_calc_car(std::vector<box> b) noexcept;
+
+	//获取人流量结构
+	struct calc_people_info* get_people_info_point() noexcept;
+
+	//获取车流量结构
+	struct calc_car_info* get_car_info_point() noexcept;
 
 public:
 	//设置视频路径

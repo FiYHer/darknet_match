@@ -25,6 +25,9 @@ private:
 	//区域管理显示
 	bool m_region_manager;
 
+	//人流量统计显示
+	bool m_people_statistics;
+
 	//d3d9设备
 	IDirect3D9* m_IDirect3D9;
 	IDirect3DDevice9* m_IDirect3DDevice9;
@@ -73,6 +76,9 @@ private:
 
 	//区域管理功能
 	void imgui_region_manager();
+
+	//人流量统计窗口
+	void imgui_people_statistics();
 
 	//窗口主菜单
 	void imgui_window_meun() noexcept;

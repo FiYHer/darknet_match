@@ -1,5 +1,6 @@
 #pragma once
 #include <opencv2/opencv.hpp>
+#include "help.h"
 
 //对象类别索引
 enum object_classes
@@ -108,7 +109,39 @@ struct calc_people_info
 	//最大人流量
 	unsigned int max_val;
 
-	calc_people_info() : enable(false) {}
+	//记录每分钟的人流量
+	std::vector<unsigned int> val_list;
+
+	void update_current_val(unsigned int val) { current_val = val; if (val > max_val) max_val = val; }
+
+	void update_new_val(unsigned int val)
+	{
+		static int time_minute = get_current_minute();
+		int current_minute = get_current_minute();
+
+		if (time_minute != current_minute)
+		{
+			time_minute = current_minute;
+			val_list.push_back(val);
+		}
+		else
+		{
+			int index = val_list.size() - 1;
+			if (index == -1) val_list.push_back(val);
+			else val_list[index] += val;
+		}
+	}
+
+	void clear()
+	{
+		current_val = max_val = 0;
+		val_list.clear();
+	}
+
+	calc_people_info() : enable(false)
+	{
+		current_val = max_val = 0;
+	}
 };
 
 struct calc_car_info

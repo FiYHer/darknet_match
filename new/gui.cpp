@@ -62,7 +62,8 @@ void gui::render_handle() noexcept
 	imgui_window_meun();//菜单
 	imgui_display_video();//视频显示
 	imgui_region_manager();//区域管理
-	ImGui::ShowDemoWindow();
+	imgui_people_statistics();//人流量统计
+	//ImGui::ShowDemoWindow();
 
 	ImGui::EndFrame();
 	m_IDirect3DDevice9->SetRenderState(D3DRS_ZENABLE, FALSE);
@@ -215,7 +216,7 @@ void gui::imgui_select_video(bool update) noexcept
 	{
 		if (ImGui::MenuItem(z_select, nullptr))
 		{
-			get_file_path("video file\0*.mp4;*.flv;*.ts\0\0", buffer, max_string_len);
+			get_file_path("video file\0*.mp4;*.flv;*.ts;*.avi\0\0", buffer, max_string_len);
 			int size = strlen(buffer);
 			if (size)
 			{
@@ -259,7 +260,7 @@ void gui::imgui_video_control_overlay(ImVec2 pos, float width) noexcept
 
 	if (ImGui::Button(z_select, { 120.0f,30.0f }))
 	{
-		get_file_path("video file\0*.mp4;*.flv;*.ts\0\0", path, max_string_len);
+		get_file_path("video file\0*.mp4;*.flv;*.ts;*.avi\0\0", path, max_string_len);
 		int size = strlen(path);
 		if (size)
 		{
@@ -425,6 +426,64 @@ void gui::imgui_region_manager()
 	ImGui::End();
 }
 
+void gui::imgui_people_statistics()
+{
+	if (m_people_statistics == false) return;
+
+	char z_title[max_string_len] = "people statistics";
+	char z_current[max_string_len] = "current people statistics %d ";
+	char z_max[max_string_len] = "max people statistics %d ";
+	char z_data[max_string_len] = "statistics data";
+	char z_save[max_string_len] = "save to file";
+	char z_clear[max_string_len] = "clear statistics data";
+	if (m_is_english == false)
+	{
+		to_utf8("人流量统计", z_title, max_string_len);
+		to_utf8("当前人流量 %d ", z_current, max_string_len);
+		to_utf8("最大人流量 %d ", z_max, max_string_len);
+		to_utf8("统计数据", z_data, max_string_len);
+		to_utf8("保存为文件", z_save, max_string_len);
+		to_utf8("清除统计数据", z_clear, max_string_len);
+	}
+	ImGui::SetNextWindowSize(ImVec2{ 500,200 });
+	ImGui::Begin(z_title, &m_people_statistics);
+
+	struct calc_people_info* people_info = m_video.get_people_info_point();
+	if (people_info->enable)
+	{
+		ImGui::Text(z_current, people_info->current_val);
+		ImGui::SameLine();
+		ImGui::Text(z_max, people_info->max_val);
+
+		static float max_height = 0;
+		float *p_data = nullptr;
+		int size = people_info->val_list.size();
+		if (size <= 0)
+		{
+			p_data = new float[1];
+			p_data[0] = 0.0f;
+		}
+		else
+		{
+			p_data = new float[size];
+			for (int i = 0; i < size; i++)
+			{
+				p_data[i] = people_info->val_list[i];
+				if (p_data[i] > max_height) max_height = p_data[i];
+			}
+		}
+
+		ImGui::PlotHistogram(z_data, p_data, size, 0, nullptr, 0.0f, max_height, ImVec2(500, 100));
+		delete[] p_data;
+
+		if (ImGui::Button(z_save)) {}
+		ImGui::SameLine();
+		if (ImGui::Button(z_clear)) people_info->clear();
+	}
+
+	ImGui::End();
+}
+
 void gui::imgui_window_meun() noexcept
 {
 	if (ImGui::BeginMainMenuBar())
@@ -503,11 +562,14 @@ void gui::imgui_features_window() noexcept
 		to_utf8("占用公交车道", z_occupy_bus, max_string_len);
 	}
 
+	struct calc_people_info* people_info = m_video.get_people_info_point();
+	struct calc_car_info* car_info = m_video.get_car_info_point();
+
 	if (ImGui::BeginMenu(z_title))
 	{
 		static bool enabled = true;
-		ImGui::MenuItem(z_calc_people, nullptr, &enabled);
-		ImGui::MenuItem(z_calc_car, nullptr, &enabled);
+		ImGui::MenuItem(z_calc_people, nullptr, &people_info->enable);
+		ImGui::MenuItem(z_calc_car, nullptr, &car_info->enable);
 		ImGui::MenuItem(z_occupy_bus, nullptr, &enabled);
 		ImGui::EndMenu();
 	}
@@ -517,15 +579,21 @@ void gui::imgui_win_window() noexcept
 {
 	char z_title[max_string_len] = "Windows";
 	char z_region[max_string_len] = "region manager";
+	char z_people[max_string_len] = "people statistics";
+	char z_car[max_string_len] = "car statistics";
 	if (m_is_english == false)
 	{
 		to_utf8("窗口", z_title, max_string_len);
 		to_utf8("区域管理", z_region, max_string_len);
+		to_utf8("人流量统计", z_people, max_string_len);
+		to_utf8("车流量统计", z_car, max_string_len);
 	}
 
 	if (ImGui::BeginMenu(z_title))
 	{
 		if (ImGui::MenuItem(z_region)) m_region_manager = true;
+		if (ImGui::MenuItem(z_people)) m_people_statistics = true;
+		if (ImGui::MenuItem(z_car)) {}
 		ImGui::EndMenu();
 	}
 }
@@ -553,7 +621,9 @@ void gui::imgui_language_window() noexcept
 gui::gui() noexcept
 {
 	m_is_english = false;
+
 	m_region_manager = false;
+	m_people_statistics = false;
 
 	m_IDirect3D9 = nullptr;
 	m_IDirect3DDevice9 = nullptr;

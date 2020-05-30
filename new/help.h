@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <stdio.h>
+#include <time.h>
 
 using r_hresult = HRESULT;
 using r_hwnd = HWND;
@@ -41,3 +42,6 @@ char* get_file_path(const char* file_type, char* buffer, int size) noexcept;
 
 //获取文件的类型
 int get_file_type(const char* path) noexcept;
+
+//获取当前的分钟
+int get_current_minute() noexcept;

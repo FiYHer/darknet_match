@@ -116,7 +116,7 @@ void __cdecl video::detect_frame_thread(void* data)
 				m_static_this->draw_box_and_font(result, box_count, &temp->frame);
 
 				//相关场景检测
-				m_static_this->scene_manager(result, box_count);
+				m_static_this->scene_manager(result, box_count, temp->frame.cols, temp->frame.rows);
 
 				//释放内存
 				free_image(mat);
@@ -188,6 +188,45 @@ void video::box_to_pos(box b, int w, int h, int& left, int& top, int& right, int
 	if (right > w - 1) right = w - 1;
 	if (top < 0) top = 0;
 	if (bot > h - 1) bot = h - 1;
+}
+
+bool video::is_coincide_rate(box a, box b, float value /*= 0.5f*/)
+{
+	if (b.x < a.x)
+	{
+		box c = a;
+		a = b;
+		b = c;
+	}
+
+	{
+		float _max = b.w - a.x;
+		float _min = a.w - b.x;
+		if (_max > 0 && _min > 0)
+		{
+			float temp = _min / _max;
+			if (temp > value) return true;
+		}
+	}
+
+	if (b.y < a.y)
+	{
+		box c = a;
+		a = b;
+		b = c;
+	}
+
+	{
+		float _max = b.h - a.y;
+		float _min = a.h - b.y;
+		if (_max > 0 && _min > 0)
+		{
+			float temp = _min / _max;
+			if (temp > value) return true;
+		}
+	}
+
+	return false;
 }
 
 bool video::get_is_reading() const noexcept
@@ -318,12 +357,12 @@ void video::draw_box_and_font(detection* detect, int count, cv::Mat* frame) noex
 				//画方框
 				{
 					cv::Scalar color{ classes_color[j][0],classes_color[j][1], classes_color[j][2] };
-					cv::rectangle(*frame, { left,top }, { right,bot }, color, 1.0f, 8, 0);
+					cv::rectangle(*frame, { left,top }, { right,bot }, color, 2.0f, 8, 0);
 				}
 
 				//画文字
 				sprintf_s(buffer, "%s %2.f%%", classes_name[j], detect[i].prob[j] * 100.0f);
-				float const font_size = frame->rows / 900.0f;
+				float const font_size = frame->rows / 700.0f;
 				cv::Size const text_size = cv::getTextSize(buffer, cv::FONT_HERSHEY_COMPLEX_SMALL, font_size, 1, 0);
 
 				cv::Point pt_left, pt_right;
@@ -382,10 +421,14 @@ void video::pop_region_back() noexcept
 	leave_region_mutex();
 }
 
-void video::scene_manager(detection* detect, int count) noexcept
+void video::scene_manager(detection* detect, int count, int w, int h) noexcept
 {
+	static int last_frame = 0;
+	if (++last_frame < 30) return;
+	last_frame = 0;
+
 	int classes_count = m_detect_model.get_classes_count();
-	int thresh = m_detect_model.get_thresh();
+	float thresh = m_detect_model.get_thresh();
 
 	using box_list = std::vector<box>;
 	box_list license_plate_list;
@@ -398,9 +441,16 @@ void video::scene_manager(detection* detect, int count) noexcept
 	{
 		for (int j = 0; j < classes_count; j++)
 		{
-			if (detect->prob[j] > thresh)
+			if (detect[i].prob[j] > thresh)
 			{
 				box b = detect[i].bbox;
+				int left, top, right, bot;
+				this->box_to_pos(b, w, h, left, top, right, bot);
+				b.x = left;
+				b.y = top;
+				b.w = right;
+				b.h = bot;
+
 				switch (j)
 				{
 				case object_license_plate: license_plate_list.push_back(b); break;
@@ -423,6 +473,24 @@ void video::scene_calc_people(std::vector<box> b) noexcept
 	using box_list = std::vector<box>;
 	static box_list last_box;
 
+	unsigned int size = b.size();
+	unsigned int new_val = size;
+
+	for (auto& it : b)
+	{
+		for (auto& ls : last_box)
+		{
+			if (is_coincide_rate(it, ls))
+			{
+				new_val--;
+				break;
+			}
+		}
+	}
+
+	m_calc_people.update_current_val(size);
+	m_calc_people.update_new_val(new_val);
+
 	last_box = std::move(b);
 }
 
@@ -432,6 +500,16 @@ void video::scene_calc_car(std::vector<box> b) noexcept
 	static box_list last_box;
 
 	last_box = std::move(b);
+}
+
+struct calc_people_info* video::get_people_info_point() noexcept
+{
+	return &m_calc_people;
+}
+
+struct calc_car_info* video::get_car_info_point() noexcept
+{
+	return &m_calc_car;
 }
 
 bool video::set_video_path(const char* path) noexcept
