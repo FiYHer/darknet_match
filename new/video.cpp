@@ -499,15 +499,33 @@ void video::scene_calc_car(std::vector<box> b) noexcept
 	using box_list = std::vector<box>;
 	static box_list last_box;
 
+	unsigned int size = b.size();
+	unsigned int new_val = size;
+
+	for (auto& it : b)
+	{
+		for (auto& ls : last_box)
+		{
+			if (is_coincide_rate(it, ls))
+			{
+				new_val--;
+				break;
+			}
+		}
+	}
+
+	m_calc_car.update_current_val(size);
+	m_calc_car.update_new_val(new_val);
+
 	last_box = std::move(b);
 }
 
-struct calc_people_info* video::get_people_info_point() noexcept
+struct calc_statistics_info* video::get_people_info_point() noexcept
 {
 	return &m_calc_people;
 }
 
-struct calc_car_info* video::get_car_info_point() noexcept
+struct calc_statistics_info* video::get_car_info_point() noexcept
 {
 	return &m_calc_car;
 }

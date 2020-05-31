@@ -97,19 +97,19 @@ struct region_info
 	}
 };
 
-//检测人流量信息
-struct calc_people_info
+//检测人/车流量信息
+struct calc_statistics_info
 {
 	//启用
 	bool enable;
 
-	//当前人流量
+	//当前人/车流量
 	unsigned int current_val;
 
-	//最大人流量
+	//最大人/车流量
 	unsigned int max_val;
 
-	//记录每分钟的人流量
+	//记录每分钟的人/车流量
 	std::vector<unsigned int> val_list;
 
 	void update_current_val(unsigned int val) { current_val = val; if (val > max_val) max_val = val; }
@@ -138,16 +138,5 @@ struct calc_people_info
 		val_list.clear();
 	}
 
-	calc_people_info() : enable(false)
-	{
-		current_val = max_val = 0;
-	}
-};
-
-struct calc_car_info
-{
-	//启用
-	bool enable;
-
-	calc_car_info() : enable(false) {}
+	calc_statistics_info() : enable(false) { clear(); }
 };

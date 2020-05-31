@@ -63,6 +63,7 @@ void gui::render_handle() noexcept
 	imgui_display_video();//视频显示
 	imgui_region_manager();//区域管理
 	imgui_people_statistics();//人流量统计
+	imgui_car_statistics();//车流量统计
 	//ImGui::ShowDemoWindow();
 
 	ImGui::EndFrame();
@@ -290,7 +291,7 @@ void gui::imgui_video_control_overlay(ImVec2 pos, float width) noexcept
 	ImGui::End();
 }
 
-void gui::imgui_region_manager()
+void gui::imgui_region_manager() noexcept
 {
 	if (m_region_manager == false) return;
 
@@ -332,8 +333,9 @@ void gui::imgui_region_manager()
 			char z_text3[max_string_len] = "press [VK_DELETE] to delete the last locale";
 			char z_text4[max_string_len] = "press [VK_SPACE] to delete the video frame setting";
 			char z_text5[max_string_len] = "click the left mouse button to set the area information";
-			char z_text6[max_string_len] = "press [VK_NUMBER0] to set the bus lane area";
-			char z_text7[max_string_len] = "press [VK_NUMBER1] to set the zebra crossing area";
+			char z_text6[max_string_len] = "click the right mouse button to set the video frame";
+			char z_text7[max_string_len] = "press [VK_NUMBER0] to set the bus lane area";
+			char z_text8[max_string_len] = "press [VK_NUMBER1] to set the zebra crossing area";
 			if (m_is_english == false)
 			{
 				to_utf8("介绍 : ", z_text1, max_string_len);
@@ -341,8 +343,9 @@ void gui::imgui_region_manager()
 				to_utf8("按[VK_DELETE]删除上一个区域设置", z_text3, max_string_len);
 				to_utf8("按[VK_SPACE]删除视频帧设置", z_text4, max_string_len);
 				to_utf8("单击鼠标左键设置区域信息", z_text5, max_string_len);
-				to_utf8("按[VK_NUMBER0]设置公交车道区域", z_text6, max_string_len);
-				to_utf8("按[VK_NUMBER1]设置斑马线区域", z_text7, max_string_len);
+				to_utf8("单击鼠标右键设置视频帧", z_text6, max_string_len);
+				to_utf8("按[VK_NUMBER0]设置公交车道区域", z_text7, max_string_len);
+				to_utf8("按[VK_NUMBER1]设置斑马线区域", z_text8, max_string_len);
 			}
 
 			ImGui::Text(z_text1);
@@ -352,6 +355,7 @@ void gui::imgui_region_manager()
 			ImGui::Text(z_text5);
 			ImGui::Text(z_text6);
 			ImGui::Text(z_text7);
+			ImGui::Text(z_text8);
 		}
 	}
 
@@ -426,7 +430,7 @@ void gui::imgui_region_manager()
 	ImGui::End();
 }
 
-void gui::imgui_people_statistics()
+void gui::imgui_people_statistics() noexcept
 {
 	if (m_people_statistics == false) return;
 
@@ -445,10 +449,11 @@ void gui::imgui_people_statistics()
 		to_utf8("保存为文件", z_save, max_string_len);
 		to_utf8("清除统计数据", z_clear, max_string_len);
 	}
+
 	ImGui::SetNextWindowSize(ImVec2{ 500,200 });
 	ImGui::Begin(z_title, &m_people_statistics);
 
-	struct calc_people_info* people_info = m_video.get_people_info_point();
+	struct calc_statistics_info* people_info = m_video.get_people_info_point();
 	if (people_info->enable)
 	{
 		ImGui::Text(z_current, people_info->current_val);
@@ -479,6 +484,65 @@ void gui::imgui_people_statistics()
 		if (ImGui::Button(z_save)) {}
 		ImGui::SameLine();
 		if (ImGui::Button(z_clear)) people_info->clear();
+	}
+
+	ImGui::End();
+}
+
+void gui::imgui_car_statistics() noexcept
+{
+	if (m_car_statistics == false) return;
+
+	char z_title[max_string_len] = "car statistics";
+	char z_current[max_string_len] = "current people statistics %d ";
+	char z_max[max_string_len] = "max people statistics %d ";
+	char z_data[max_string_len] = "statistics data";
+	char z_save[max_string_len] = "save to file";
+	char z_clear[max_string_len] = "clear data";
+	if (m_is_english == false)
+	{
+		to_utf8("车辆统计", z_title, max_string_len);
+		to_utf8("当前车流量 %d ", z_current, max_string_len);
+		to_utf8("最大车流量 %d ", z_max, max_string_len);
+		to_utf8("统计数据", z_data, max_string_len);
+		to_utf8("保存到文件", z_save, max_string_len);
+		to_utf8("清除统计数据", z_clear, max_string_len);
+	}
+
+	ImGui::SetNextWindowSize(ImVec2{ 500,200 });
+	ImGui::Begin(z_title, &m_car_statistics);
+
+	struct calc_statistics_info* car_info = m_video.get_car_info_point();
+	if (car_info->enable)
+	{
+		ImGui::Text(z_current, car_info->current_val);
+		ImGui::SameLine();
+		ImGui::Text(z_max, car_info->max_val);
+
+		static float max_height = 0;
+		float *p_data = nullptr;
+		int size = car_info->val_list.size();
+		if (size <= 0)
+		{
+			p_data = new float[1];
+			p_data[0] = 0.0f;
+		}
+		else
+		{
+			p_data = new float[size];
+			for (int i = 0; i < size; i++)
+			{
+				p_data[i] = car_info->val_list[i];
+				if (p_data[i] > max_height) max_height = p_data[i];
+			}
+		}
+
+		ImGui::PlotHistogram(z_data, p_data, size, 0, nullptr, 0.0f, max_height, ImVec2(500, 100));
+		delete[] p_data;
+
+		if (ImGui::Button(z_save)) {}
+		ImGui::SameLine();
+		if (ImGui::Button(z_clear)) car_info->clear();
 	}
 
 	ImGui::End();
@@ -562,12 +626,12 @@ void gui::imgui_features_window() noexcept
 		to_utf8("占用公交车道", z_occupy_bus, max_string_len);
 	}
 
-	struct calc_people_info* people_info = m_video.get_people_info_point();
-	struct calc_car_info* car_info = m_video.get_car_info_point();
+	struct calc_statistics_info* people_info = m_video.get_people_info_point();
+	struct calc_statistics_info* car_info = m_video.get_car_info_point();
 
 	if (ImGui::BeginMenu(z_title))
 	{
-		static bool enabled = true;
+		static bool enabled = false;
 		ImGui::MenuItem(z_calc_people, nullptr, &people_info->enable);
 		ImGui::MenuItem(z_calc_car, nullptr, &car_info->enable);
 		ImGui::MenuItem(z_occupy_bus, nullptr, &enabled);
@@ -593,7 +657,7 @@ void gui::imgui_win_window() noexcept
 	{
 		if (ImGui::MenuItem(z_region)) m_region_manager = true;
 		if (ImGui::MenuItem(z_people)) m_people_statistics = true;
-		if (ImGui::MenuItem(z_car)) {}
+		if (ImGui::MenuItem(z_car)) m_car_statistics = true;
 		ImGui::EndMenu();
 	}
 }
@@ -624,12 +688,19 @@ gui::gui() noexcept
 
 	m_region_manager = false;
 	m_people_statistics = false;
+	m_car_statistics = false;
 
 	m_IDirect3D9 = nullptr;
 	m_IDirect3DDevice9 = nullptr;
 	m_IDirect3DTexture9 = nullptr;
 
 	m_D3DPRESENT_PARAMETERS = { 0 };
+}
+
+gui::~gui() noexcept
+{
+	clear_d3d9();
+	clear_imgui();
 }
 
 void gui::create_and_show(const char* name /*= "darknet_imgui"*/) noexcept

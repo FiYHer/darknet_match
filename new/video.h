@@ -62,10 +62,10 @@ private:
 
 private:
 	//检测人流量
-	struct calc_people_info m_calc_people;
+	struct calc_statistics_info m_calc_people;
 
 	//检测车流量
-	struct calc_car_info m_calc_car;
+	struct calc_statistics_info m_calc_car;
 
 private:
 	//读取视频帧线程
@@ -163,10 +163,10 @@ public:
 	void scene_calc_car(std::vector<box> b) noexcept;
 
 	//获取人流量结构
-	struct calc_people_info* get_people_info_point() noexcept;
+	struct calc_statistics_info* get_people_info_point() noexcept;
 
 	//获取车流量结构
-	struct calc_car_info* get_car_info_point() noexcept;
+	struct calc_statistics_info* get_car_info_point() noexcept;
 
 public:
 	//设置视频路径
