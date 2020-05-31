@@ -699,8 +699,6 @@ gui::gui() noexcept
 
 gui::~gui() noexcept
 {
-	clear_d3d9();
-	clear_imgui();
 }
 
 void gui::create_and_show(const char* name /*= "darknet_imgui"*/) noexcept
