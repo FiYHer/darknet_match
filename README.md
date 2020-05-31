@@ -1,8 +1,8 @@
 
-## 效果图
+# 效果图
 <h1 align="center">
-	<img src="test1.jpg" alt="">
-	<img src="test2.jpg" alt="">
+	<img src="test1.jpg" alt="新版">
+	<img src="test2.jpg" alt="新版">
 </h1>
 
 ## 功能
