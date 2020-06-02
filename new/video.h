@@ -5,6 +5,7 @@
 
 #include "struct.h"
 #include "detect.h"
+#include "recognition.h"
 
 #include <iostream>
 #include <mutex>
@@ -59,6 +60,8 @@ private:
 
 	//区域互斥
 	std::mutex m_region_mutex;
+
+	//车牌识别模型
 
 private:
 	//检测人流量
@@ -139,6 +142,9 @@ public:
 
 	//绘制方框和字体
 	void draw_box_and_font(detection* detect, int count, cv::Mat* frame) noexcept;
+
+	//绘制区域
+	void draw_regions(cv::Mat* frame) noexcept;
 
 	//获取区域列表
 	std::vector<region_info> get_region_list() const noexcept;

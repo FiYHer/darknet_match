@@ -115,6 +115,9 @@ void __cdecl video::detect_frame_thread(void* data)
 				//绘制方框和字体
 				m_static_this->draw_box_and_font(result, box_count, &temp->frame);
 
+				//绘制区域
+				m_static_this->draw_regions(&temp->frame);
+
 				//相关场景检测
 				m_static_this->scene_manager(result, box_count, temp->frame.cols, temp->frame.rows);
 
@@ -174,6 +177,7 @@ void video::box_to_pos(box b, int w, int h, int& left, int& top, int& right, int
 	if (std::isnan(b.h) || std::isinf(b.h)) b.h = 0.5;
 	if (std::isnan(b.x) || std::isinf(b.x)) b.x = 0.5;
 	if (std::isnan(b.y) || std::isinf(b.y)) b.y = 0.5;
+
 	b.w = (b.w < 1) ? b.w : 1;
 	b.h = (b.h < 1) ? b.h : 1;
 	b.x = (b.x < 1) ? b.x : 1;
@@ -390,6 +394,24 @@ void video::draw_box_and_font(detection* detect, int count, cv::Mat* frame) noex
 			}
 		}
 	}
+}
+
+void video::draw_regions(cv::Mat* frame) noexcept
+{
+	entry_region_mutex();
+
+	for (auto& it : m_regions)
+	{
+		box b = it.to_box_data();
+		int left = b.x *  frame->cols;
+		int right = b.w *  frame->cols;
+		int top = b.y *  frame->rows;
+		int bot = b.h * frame->rows;
+
+		cv::rectangle(*frame, { left,top }, { right,bot }, it.color, 2.0f, 8, 0);
+	}
+
+	leave_region_mutex();
 }
 
 std::vector<region_info> video::get_region_list() const noexcept

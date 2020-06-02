@@ -1,4 +1,7 @@
 #pragma once
+
+#include "darknet.h"
+
 #include <opencv2/opencv.hpp>
 #include "help.h"
 
@@ -58,11 +61,14 @@ enum region_type
 //矩阵区域信息
 struct rect_info
 {
+	//窗口宽高
+	float w, h;
+
 	//
-	int left, top, right, down;
+	float left, top, right, down;
 
 	rect_info() : left(0), top(0), right(0), down(0) {}
-	rect_info(int l, int t, int r, int d) : left(l), top(t), right(r), down(d) {}
+	rect_info(float l, float t, float r, float d) : left(l), top(t), right(r), down(d) {}
 	rect_info operator=(rect_info& t)
 	{
 		left = t.left;
@@ -73,7 +79,6 @@ struct rect_info
 	}
 };
 
-//区域信息
 /// <summary>
 /// 区域信息
 /// </summary>
@@ -87,6 +92,17 @@ struct region_info
 
 	//区域颜色
 	unsigned int color;
+
+	//返回规范化的位置信息
+	box to_box_data() noexcept
+	{
+		box b;
+		b.x = (rect.left - 8.0f) / (rect.w - 8.0f);
+		b.y = (rect.top - 35.0f) / (rect.h - 35.0f);
+		b.w = (rect.right - 8.0f) / (rect.w - 8.0f);
+		b.h = (rect.down - 35.0f) / (rect.h - 35.0f);
+		return b;
+	}
 
 	region_info() : type(region_bus), color(0) {}
 	region_info(struct rect_info r, region_type t, unsigned int c)

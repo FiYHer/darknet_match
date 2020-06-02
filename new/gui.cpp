@@ -366,7 +366,7 @@ void gui::imgui_region_manager() noexcept
 	//获取绘制指针
 	ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
-	//x减去8.0f  y减去34.0f
+	//x减去8.0f  y减去25.0f
 	ImVec2 win_size = ImGui::GetWindowSize();
 	ImVec2 mouse_size = ImGui::GetIO().MousePos;
 	ImVec2 user_size = ImGui::GetContentRegionAvail();
@@ -399,6 +399,8 @@ void gui::imgui_region_manager() noexcept
 				if (x > 30.0f || y > 30.0f)
 				{
 					struct region_info temp;
+					temp.rect.w = win_size.x;
+					temp.rect.h = win_size.y;
 					temp.type = reg_type;
 					if (reg_type == region_bus) temp.color = ImColor(ImVec4(1.0f, 0.0f, 0.4f, 1.0f));
 					if (reg_type == region_zebra_cross) temp.color = ImColor(ImVec4(0, 1.0f, 0.4f, 1.0f));
