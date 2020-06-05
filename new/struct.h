@@ -125,19 +125,27 @@ struct calc_statistics_info
 	//最大人/车流量
 	unsigned int max_val;
 
+	//当前时间与上一次时间
+	int current_time, last_time;
+
 	//记录每分钟的人/车流量
 	std::vector<unsigned int> val_list;
 
-	void update_current_val(unsigned int val) { current_val = val; if (val > max_val) max_val = val; }
+	//记录人/车图像帧
+	std::vector<cv::Mat> val_images;
+	std::mutex image_mutex;
 
-	void update_new_val(unsigned int val)
+	//更新当前人/车流量
+	void update_current_val(unsigned int val) noexcept { current_val = val; if (val > max_val) max_val = val; }
+
+	//更新刚检测到的人/车流量
+	void update_new_val(unsigned int val) noexcept
 	{
-		static int time_minute = get_current_minute();
-		int current_minute = get_current_minute();
+		current_time = get_current_minute();
 
-		if (time_minute != current_minute)
+		if (last_time != current_time)
 		{
-			time_minute = current_minute;
+			last_time = current_time;
 			val_list.push_back(val);
 		}
 		else
@@ -148,11 +156,40 @@ struct calc_statistics_info
 		}
 	}
 
-	void clear()
+	//更新人/车视频帧
+	void update_image(cv::Mat frame) noexcept
+	{
+		const cv::Size size{ 100,100 };
+		cv::resize(frame, frame, size);
+
+		entry_image();
+		val_images.push_back(std::move(frame));
+		while (val_images.size() > 5)
+		{
+			val_images.begin()->release();
+			val_images.erase(val_images.begin());
+		}
+		leave_image();
+	}
+
+	void entry_image() noexcept { image_mutex.lock(); }
+	void leave_image() noexcept { image_mutex.unlock(); }
+
+	//清空数据
+	void clear() noexcept
 	{
 		current_val = max_val = 0;
 		val_list.clear();
+
+		entry_image();
+		for (auto& it : val_images) it.release();
+		val_images.clear();
+		leave_image();
 	}
 
-	calc_statistics_info() : enable(false) { clear(); }
+	calc_statistics_info() : enable(false)
+	{
+		clear();
+		last_time = get_current_minute();
+	}
 };

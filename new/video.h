@@ -160,13 +160,16 @@ public:
 	void pop_region_back() noexcept;
 
 	//场景管理
-	void scene_manager(detection* detect, int count, int w, int h) noexcept;
+	void scene_manager(detection* detect, int count, int w, int h, cv::Mat* frame) noexcept;
 
 	//人流量统计场景
-	void scene_calc_people(std::vector<box> b) noexcept;
+	void scene_calc_people(std::vector<box> b, cv::Mat* frame) noexcept;
 
 	//车流量统计场景
-	void scene_calc_car(std::vector<box> b) noexcept;
+	void scene_calc_car(std::vector<box> b, cv::Mat* frame) noexcept;
+
+	//占用公交车道场景
+	void scene_occupy_bus(std::vector<box> b) noexcept;
 
 	//获取人流量结构
 	struct calc_statistics_info* get_people_info_point() noexcept;

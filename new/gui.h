@@ -37,6 +37,9 @@ private:
 	D3DPRESENT_PARAMETERS m_D3DPRESENT_PARAMETERS;
 	IDirect3DTexture9* m_IDirect3DTexture9;
 
+	//图片纹理
+	std::vector<IDirect3DTexture9*> m_textures_list;
+
 	//视频处理
 	video m_video;
 
@@ -102,6 +105,19 @@ private:
 	/// <param name="data">视频帧数据.</param>
 	/// <returns></returns>
 	void update_texture(struct frame_handle* data) noexcept;
+
+	/// <summary>
+	/// 获取图片纹理
+	/// </summary>
+	/// <param name="frame">图片数据指针</param>
+	/// <returns></returns>
+	IDirect3DTexture9* get_image_texture(cv::Mat* frame) noexcept;
+
+	/// <summary>
+	/// 释放全部的图像位图.
+	/// </summary>
+	/// <returns></returns>
+	void release_image_texture() noexcept;
 
 	/// <summary>
 	/// 视频显示窗口.

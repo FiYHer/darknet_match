@@ -112,14 +112,14 @@ void __cdecl video::detect_frame_thread(void* data)
 				//非极大值抑制
 				do_nms_sort(result, box_count, classes_count, nms);
 
+				//相关场景检测
+				m_static_this->scene_manager(result, box_count, temp->frame.cols, temp->frame.rows, &temp->frame);
+
 				//绘制方框和字体
 				m_static_this->draw_box_and_font(result, box_count, &temp->frame);
 
 				//绘制区域
 				m_static_this->draw_regions(&temp->frame);
-
-				//相关场景检测
-				m_static_this->scene_manager(result, box_count, temp->frame.cols, temp->frame.rows);
 
 				//释放内存
 				free_image(mat);
@@ -443,10 +443,10 @@ void video::pop_region_back() noexcept
 	leave_region_mutex();
 }
 
-void video::scene_manager(detection* detect, int count, int w, int h) noexcept
+void video::scene_manager(detection* detect, int count, int w, int h, cv::Mat* frame) noexcept
 {
-	static int last_frame = 0;
-	if (++last_frame < 30) return;
+	static int last_frame = 30;
+	if (++last_frame < get_display_fps()) return;
 	last_frame = 0;
 
 	int classes_count = m_detect_model.get_classes_count();
@@ -486,11 +486,11 @@ void video::scene_manager(detection* detect, int count, int w, int h) noexcept
 		}
 	}
 
-	if (m_calc_people.enable) scene_calc_people(people_list);
-	if (m_calc_car.enable) scene_calc_car(car_list);
+	if (m_calc_people.enable) scene_calc_people(people_list, frame);
+	if (m_calc_car.enable) scene_calc_car(car_list, frame);
 }
 
-void video::scene_calc_people(std::vector<box> b) noexcept
+void video::scene_calc_people(std::vector<box> b, cv::Mat* frame) noexcept
 {
 	using box_list = std::vector<box>;
 	static box_list last_box;
@@ -498,15 +498,26 @@ void video::scene_calc_people(std::vector<box> b) noexcept
 	unsigned int size = b.size();
 	unsigned int new_val = size;
 
-	for (auto& it : b)
+	for (const auto& it : b)
 	{
-		for (auto& ls : last_box)
+		bool status = true;
+
+		for (auto ls = last_box.begin(); ls != last_box.end(); ls++)
 		{
-			if (is_coincide_rate(it, ls))
+			if (is_coincide_rate(it, *ls, 0.2f))
 			{
+				last_box.erase(ls);
 				new_val--;
+				status = false;
 				break;
 			}
+		}
+
+		if (status)
+		{
+			cv::Rect r{ (int)it.x, (int)it.y, (int)it.w - (int)it.x, (int)it.h - (int)it.y };
+			cv::Mat src = (*frame)(r);
+			m_calc_people.update_image(src);
 		}
 	}
 
@@ -516,7 +527,7 @@ void video::scene_calc_people(std::vector<box> b) noexcept
 	last_box = std::move(b);
 }
 
-void video::scene_calc_car(std::vector<box> b) noexcept
+void video::scene_calc_car(std::vector<box> b, cv::Mat* frame) noexcept
 {
 	using box_list = std::vector<box>;
 	static box_list last_box;
@@ -524,15 +535,26 @@ void video::scene_calc_car(std::vector<box> b) noexcept
 	unsigned int size = b.size();
 	unsigned int new_val = size;
 
-	for (auto& it : b)
+	for (const auto& it : b)
 	{
-		for (auto& ls : last_box)
+		bool status = true;
+
+		for (auto ls = last_box.begin(); ls != last_box.end(); ls++)
 		{
-			if (is_coincide_rate(it, ls))
+			if (is_coincide_rate(it, *ls, 0.2f))
 			{
+				last_box.erase(ls);
 				new_val--;
+				status = false;
 				break;
 			}
+		}
+
+		if (status)
+		{
+			cv::Rect r{ (int)it.x, (int)it.y, (int)it.w - (int)it.x, (int)it.h - (int)it.y };
+			cv::Mat src = (*frame)(r);
+			m_calc_car.update_image(src);
 		}
 	}
 
@@ -540,6 +562,10 @@ void video::scene_calc_car(std::vector<box> b) noexcept
 	m_calc_car.update_new_val(new_val);
 
 	last_box = std::move(b);
+}
+
+void video::scene_occupy_bus(std::vector<box> b) noexcept
+{
 }
 
 struct calc_statistics_info* video::get_people_info_point() noexcept

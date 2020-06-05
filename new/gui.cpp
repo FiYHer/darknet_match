@@ -91,6 +91,8 @@ void gui::render_handle() noexcept
 		m_IDirect3DTexture9->Release();
 		m_IDirect3DTexture9 = nullptr;
 	}
+
+	release_image_texture();
 }
 
 void gui::device_reset() noexcept
@@ -169,6 +171,54 @@ void gui::update_texture(struct frame_handle* data) noexcept
 	}
 
 	delete buffer;
+}
+
+IDirect3DTexture9* gui::get_image_texture(cv::Mat* frame) noexcept
+{
+	if (frame->empty()) return nullptr;
+
+	int w = frame->cols;
+	int h = frame->rows;
+	int c = frame->channels();
+
+	unsigned char* buffer = new unsigned char[w * h * (c + 1)];
+	for (int i = 0; i < h; i++)
+	{
+		for (int j = 0; j < w; j++)
+		{
+			buffer[(i * w + j) * (c + 1) + 0] = frame->data[(i * w + j) * c + 0];
+			buffer[(i * w + j) * (c + 1) + 1] = frame->data[(i * w + j) * c + 1];
+			buffer[(i * w + j) * (c + 1) + 2] = frame->data[(i * w + j) * c + 2];
+			buffer[(i * w + j) * (c + 1) + 3] = 0xff;
+		}
+	}
+
+	IDirect3DTexture9* texture = nullptr;
+	r_hresult result = m_IDirect3DDevice9->CreateTexture(w, h, 1, D3DUSAGE_DYNAMIC, D3DFMT_X8R8G8B8, D3DPOOL_DEFAULT, &texture, nullptr);
+	if (result == S_OK)
+	{
+		D3DLOCKED_RECT rect{ 0 };
+		texture->LockRect(0, &rect, nullptr, 0);
+
+		for (int i = 0; i < h; i++)
+			memcpy((unsigned char*)rect.pBits + rect.Pitch * i, buffer + (w * (c + 1)) * i, w * (c + 1));
+
+		texture->UnlockRect(0);
+
+		//保存进列表 好统一release()
+		m_textures_list.push_back(texture);
+	}
+
+	delete buffer;
+
+	return texture;
+}
+
+void gui::release_image_texture() noexcept
+{
+	for (auto& it : m_textures_list)
+		it->Release();
+	m_textures_list.clear();
 }
 
 void gui::imgui_display_video() noexcept
@@ -452,7 +502,7 @@ void gui::imgui_people_statistics() noexcept
 		to_utf8("清除统计数据", z_clear, max_string_len);
 	}
 
-	ImGui::SetNextWindowSize(ImVec2{ 500,200 });
+	ImGui::SetNextWindowSize(ImVec2{ 550,300 });
 	ImGui::Begin(z_title, &m_people_statistics);
 
 	struct calc_statistics_info* people_info = m_video.get_people_info_point();
@@ -486,6 +536,18 @@ void gui::imgui_people_statistics() noexcept
 		if (ImGui::Button(z_save)) {}
 		ImGui::SameLine();
 		if (ImGui::Button(z_clear)) people_info->clear();
+
+		people_info->entry_image();
+		for (auto it = people_info->val_images.rbegin(); it != people_info->val_images.rend(); it++)
+		{
+			IDirect3DTexture9* res = get_image_texture(&(*it));
+			if (res)
+			{
+				ImGui::Image(res, { 100,100 });
+				ImGui::SameLine();
+			}
+		}
+		people_info->leave_image();
 	}
 
 	ImGui::End();
@@ -511,7 +573,7 @@ void gui::imgui_car_statistics() noexcept
 		to_utf8("清除统计数据", z_clear, max_string_len);
 	}
 
-	ImGui::SetNextWindowSize(ImVec2{ 500,200 });
+	ImGui::SetNextWindowSize(ImVec2{ 550,300 });
 	ImGui::Begin(z_title, &m_car_statistics);
 
 	struct calc_statistics_info* car_info = m_video.get_car_info_point();
@@ -545,6 +607,18 @@ void gui::imgui_car_statistics() noexcept
 		if (ImGui::Button(z_save)) {}
 		ImGui::SameLine();
 		if (ImGui::Button(z_clear)) car_info->clear();
+
+		car_info->entry_image();
+		for (auto it = car_info->val_images.rbegin(); it != car_info->val_images.rend(); it++)
+		{
+			IDirect3DTexture9* res = get_image_texture(&(*it));
+			if (res)
+			{
+				ImGui::Image(res, { 100,100 });
+				ImGui::SameLine();
+			}
+		}
+		car_info->leave_image();
 	}
 
 	ImGui::End();
