@@ -4,6 +4,9 @@
 #include "darknet.h"
 #include "parser.h"
 
+/// <summary>
+/// 物体检测类
+/// </summary>
 class object_detect
 {
 private:
@@ -23,6 +26,7 @@ private:
 	//是否加载
 	bool m_loaded;
 
+	//检测相关阈值
 	float m_thresh;
 	float m_hier_thresh;
 	float m_nms;
@@ -31,39 +35,73 @@ public:
 	object_detect();
 	~object_detect();
 
-	//加载模型
+	/// <summary>
+	/// 加载模型.
+	/// </summary>
+	/// <returns>加载成功返回true，否则返回false</returns>
 	bool load_model() noexcept;
 
-	//卸载模型
+	/// <summary>
+	/// 卸载模型.
+	/// </summary>
+	/// <returns>卸载成功返回true，否则返回false</returns>
 	bool unload_model() noexcept;
 
 public:
-	//设置模型文件路径
+	/// <summary>
+	/// 设置模型文件路径.
+	/// </summary>
+	/// <param name="path">模型文件路径.</param>
+	/// <returns>设置成功返回true，否则返回false</returns>
 	bool set_model_path(const char* path) noexcept;
 
-	//获取网络模型
+	/// <summary>
+	/// 获取网络模型.
+	/// </summary>
+	/// <returns>返回模型指针</returns>
 	network* get_network() noexcept;
 
-	//获取标签数量
+	/// <summary>
+	/// 获取标签数量.
+	/// </summary>
+	/// <returns>返回类别数量</returns>
 	int get_classes_count() const noexcept;
 
-	//获取标签字符串
+	/// <summary>
+	/// 获取标签字符串.
+	/// </summary>
+	/// <returns>返回类别字符串指针</returns>
 	char** get_classes_name() const noexcept;
 
-	//获取模型是否加载
+	/// <summary>
+	/// 获取模型是否加载.
+	/// </summary>
+	/// <returns>返回模型加载的状态标识</returns>
 	bool get_model_loader() const noexcept;
 
-	//获取检测阈值相关
+	/// <summary>
+	/// 获取检测阈值相关.
+	/// </summary>
+	/// <returns>返回相关阈值</returns>
 	float get_thresh() const noexcept;
 	float get_hier_thresh() const noexcept;
 	float get_nms() const noexcept;
 
-	//获取类别颜色
+	/// <summary>
+	/// 获取类别颜色.
+	/// </summary>
+	/// <returns>返回类别颜色指针</returns>
 	float** get_classes_color() const noexcept;
 
-	//释放类别名称
+	/// <summary>
+	/// 释放类别名称内存.
+	/// </summary>
+	/// <returns></returns>
 	void free_classes_name() noexcept;
 
-	//释放类别颜色
+	/// <summary>
+	/// 释放类别颜色内存.
+	/// </summary>
+	/// <returns></returns>
 	void free_classes_color() noexcept;
 };

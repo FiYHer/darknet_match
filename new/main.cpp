@@ -1,9 +1,13 @@
-
 #include "gui.h"
 
-//int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
-int main(int argc, char* argv[])
+//int main(int argc, char* argv[])
+int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
+	UNREFERENCED_PARAMETER(hInstance);
+	UNREFERENCED_PARAMETER(hPrevInstance);
+	UNREFERENCED_PARAMETER(lpCmdLine);
+	UNREFERENCED_PARAMETER(nShowCmd);
+
 	cuda_set_device(cuda_get_device());
 	CHECK_CUDA(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
 
@@ -12,7 +16,3 @@ int main(int argc, char* argv[])
 	g.msg_handle();
 	return 0;
 }
-
-
-
-

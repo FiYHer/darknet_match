@@ -22,19 +22,32 @@ object_detect::object_detect()
 
 object_detect::~object_detect()
 {
-	if (m_path) free_memory(m_path);
+	if (m_path)
+		free_memory(m_path);
 	free_classes_name();
 	free_classes_color();
 }
 
 bool object_detect::load_model() noexcept
 {
-	if (m_loaded || m_path == nullptr)
+	if (m_loaded)
+	{
+		check_warning(false, "模型不能够二次加载");
 		return false;
+	}
+
+	if (m_path == nullptr)
+	{
+		check_warning(false, "模型路径有误");
+		return false;
+	}
 
 	std::fstream file(m_path, std::fstream::in);
 	if (file.is_open() == false)
+	{
+		check_warning(false, "模型文件打开失败");
 		return false;
+	}
 
 	std::string names_path, cfg_path, weights_path;
 	getline(file, names_path);
@@ -43,11 +56,17 @@ bool object_detect::load_model() noexcept
 	file.close();
 
 	if (names_path.empty() || cfg_path.empty() || weights_path.empty())
+	{
+		check_warning(false, "模型文件内容有误");
 		return false;
+	}
 
 	file.open(names_path, std::fstream::in);
 	if (file.is_open() == false)
+	{
+		check_warning(false, "标签文件打开失败");
 		return false;
+	}
 
 	std::vector<std::string> classes_buffer;
 	std::string buffer;
@@ -55,25 +74,15 @@ bool object_detect::load_model() noexcept
 		classes_buffer.push_back(std::move(buffer));
 	file.close();
 
-	if (m_classes_name)
-	{
-		for (int i = 0; i < m_classes_count; i++)
-			free_memory(m_classes_name[i]);
-		free_memory(m_classes_name);
-	}
-
 	{
 		int size = classes_buffer.size();
 		m_classes_count = size;
 		m_classes_name = alloc_memory<char**>(size);
-		if (m_classes_name == nullptr)
-			return false;
 
 		for (int i = 0; i < size; i++)
 		{
 			int len = classes_buffer[i].size();
 			m_classes_name[i] = alloc_memory<char*>(len);
-			if (m_classes_name[i] == nullptr) return false;
 			strncpy(m_classes_name[i], classes_buffer[i].c_str(), len);
 		}
 	}
@@ -83,20 +92,18 @@ bool object_detect::load_model() noexcept
 
 		int size = classes_buffer.size();
 		m_classes_color = alloc_memory<float**>(size);
-		if (m_classes_color == nullptr)
-			return false;
 
+		//随机设置颜色
 		for (int i = 0; i < size; i++)
 		{
 			m_classes_color[i] = alloc_memory<float*>(3);
-			if (m_classes_color[i] == nullptr)
-				return false;
 			m_classes_color[i][0] = rand() % 255;
 			m_classes_color[i][1] = rand() % 255;
 			m_classes_color[i][2] = rand() % 255;
 		}
 	}
 
+	//加载模型文件
 	m_net = parse_network_cfg_custom((char*)cfg_path.c_str(), 1, 1);
 	load_weights(&m_net, (char*)weights_path.c_str());
 	fuse_conv_batchnorm(m_net);
@@ -110,8 +117,10 @@ bool object_detect::unload_model() noexcept
 {
 	if (m_loaded)
 		free_network(m_net);
+
 	free_classes_name();
 	free_classes_color();
+
 	m_loaded = false;
 	return true;
 }

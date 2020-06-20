@@ -653,6 +653,7 @@ void gui::imgui_model_window() noexcept
 	}
 
 	bool is_load_detect = m_video.get_detect_model()->get_model_loader();
+	bool is_load_recognition = m_video.get_recognition_model()->is_loaded();
 
 	if (ImGui::BeginMenu(z_model))
 	{
@@ -663,11 +664,11 @@ void gui::imgui_model_window() noexcept
 				char buffer[max_string_len]{ 0 };
 				get_file_path("Model \0*.model\0\0", buffer, max_string_len);
 
+				int len = strlen(buffer);
 				object_detect* model = m_video.get_detect_model();
-				if (model->set_model_path(buffer))
+				if (len && model->set_model_path(buffer))
 				{
-					if (model->load_model() == false)
-						check_warning(false, "加载物体检测模型失败");
+					if (model->load_model() == false) {}
 				}
 				else check_warning(false, "设置模型文件失败");
 			}
@@ -677,10 +678,25 @@ void gui::imgui_model_window() noexcept
 			}
 			ImGui::EndMenu();
 		}
+
 		if (ImGui::BeginMenu(z_recognition_model))
 		{
-			if (ImGui::MenuItem(z_Load_model)) {}
-			if (ImGui::MenuItem(z_Unload_model)) {}
+			if (ImGui::MenuItem(z_Load_model, nullptr, false, !is_load_recognition))
+			{
+				char buffer[max_string_len]{ 0 };
+				get_file_path("Model \0*.model\0\0", buffer, max_string_len);
+
+				int len = strlen(buffer);
+				object_recognition* recognition = m_video.get_recognition_model();
+				if (len && recognition->set_model_path(buffer))
+				{
+					recognition->load_model();
+				}
+			}
+			if (ImGui::MenuItem(z_Unload_model, nullptr, false, is_load_recognition))
+			{
+				m_video.get_recognition_model()->unload_model();
+			}
 			ImGui::EndMenu();
 		}
 		ImGui::EndMenu();

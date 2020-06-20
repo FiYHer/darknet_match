@@ -318,6 +318,11 @@ object_detect* video::get_detect_model() noexcept
 	return &m_detect_model;
 }
 
+object_recognition* video::get_recognition_model() noexcept
+{
+	return &m_recognition_model;
+}
+
 image video::to_image(cv::Mat frame, int out_w, int out_h, int out_c) noexcept
 {
 	cv::Mat temp = cv::Mat(out_w, out_h, out_c);
@@ -488,6 +493,8 @@ void video::scene_manager(detection* detect, int count, int w, int h, cv::Mat* f
 
 	if (m_calc_people.enable) scene_calc_people(people_list, frame);
 	if (m_calc_car.enable) scene_calc_car(car_list, frame);
+
+	if (m_recognition_car_id) scene_recognition_car_id(license_plate_list, frame);
 }
 
 void video::scene_calc_people(std::vector<box> b, cv::Mat* frame) noexcept
@@ -566,6 +573,19 @@ void video::scene_calc_car(std::vector<box> b, cv::Mat* frame) noexcept
 
 void video::scene_occupy_bus(std::vector<box> b) noexcept
 {
+}
+
+void video::scene_recognition_car_id(std::vector<box> b, cv::Mat* frame) noexcept
+{
+	CreateDirectoryA("car_ids", nullptr);
+	//if (m_recognition_model.is_loaded() == false)
+	//	return;
+
+	//for (const auto& it : b)
+	//{
+	//	int ids[7];
+	//	m_recognition_model.analyse();
+	//}
 }
 
 struct calc_statistics_info* video::get_people_info_point() noexcept
@@ -714,6 +734,8 @@ video::video()
 	m_mode = e_mode_video;
 
 	m_display_fps = 0;
+
+	m_recognition_car_id = false;
 }
 
 video::~video()
